@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compartilhar Tela — transmissão de tela e áudio no navegador</title>
+  <meta name="description" content="Transmita sua tela e o áudio do computador para até 10 pessoas, direto do navegador. Sem conta, sem instalação e sem servidor de vídeo.">
+  <meta name="author" content="Endrigo Costa">
+  <meta name="theme-color" content="#07090e">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="icons/logo.svg">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ícones -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-share" viewBox="0 0 24 24"><rect x="2" y="3.5" width="20" height="13.5" rx="2.5"/><path d="M8 21h8M12 17v4M12 13V8M9.5 10.5 12 8l2.5 2.5"/></symbol>
+      <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></symbol>
+      <symbol id="i-mute" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4zM22 9l-6 6M16 9l6 6"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></symbol>
+      <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+      <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+      <symbol id="i-window" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 8.5h18M14 17l3-3M14 14h3v3"/></symbol>
+      <symbol id="i-page" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><rect x="7" y="8" width="10" height="6" rx="1"/></symbol>
+      <symbol id="i-cinema" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="m10.5 9.5 4 2.5-4 2.5z"/></symbol>
+      <symbol id="i-pip" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2.5"/><rect x="12" y="12" width="7" height="5" rx="1"/></symbol>
+      <symbol id="i-exit" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+      <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0M12 18l4-6"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20zM12 10v4M12 17.5h.01"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+      <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4"/></symbol>
+      <symbol id="i-type" viewBox="0 0 24 24"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="grade-fundo" aria-hidden="true"></div>
+  <div class="fundo" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span></div>
+
+  <header class="topo so-home">
+    <a class="logo" href="./" aria-label="Compartilhar Tela - início">
+      <img src="icons/logo.svg" width="36" height="36" alt="">
+      <span class="marca">Compartilhar Tela</span>
+    </a>
+    <nav class="pilula">
+      <a href="#produto">Produto</a>
+      <a href="#recursos">Recursos</a>
+      <a href="#como">Como funciona</a>
+      <a href="#specs">Especificações</a>
+      <a href="#faq">Dúvidas</a>
+    </nav>
+    <button id="btn-instalar" class="btn peq" hidden><svg class="ic"><use href="#i-download"/></svg>Instalar app</button>
+  </header>
+
+  <main id="inicio">
+    <!-- HERO + APP -->
+    <section class="hero">
+      <div class="hero-texto so-home">
+        <span class="selo reveal">Conexão ponto a ponto · WebRTC</span>
+        <h1 class="reveal d1">Transmissão de tela e áudio, direto no navegador.</h1>
+        <p class="lead reveal d2">Compartilhe sua tela e o som do computador com até 10 pessoas. Sem conta, sem instalação e sem servidor de vídeo no meio do caminho.</p>
+        <ul class="mini reveal d3">
+          <li>Até 1080p · 60 fps</li>
+          <li>Áudio do sistema</li>
+          <li>Criptografia de ponta a ponta</li>
+        </ul>
+      </div>
+
+      <div class="painel-wrap reveal d2" id="painel-wrap">
+        <div class="painel" id="app">
+
+          <!-- Início -->
+          <section id="tela-inicio" class="tela">
+            <div class="cab"><h2>Nova transmissão</h2></div>
+
+            <div class="opcoes">
+              <div class="grupo">
+                <span class="rot"><svg class="ic"><use href="#i-sliders"/></svg>Resolução</span>
+                <div class="seg" id="seg-res" role="group" aria-label="Resolução">
+                  <button type="button" data-v="480">480p</button>
+                  <button type="button" data-v="720" class="on">720p</button>
+                  <button type="button" data-v="1080">1080p</button>
+                </div>
+              </div>
+              <div class="grupo">
+                <span class="rot"><svg class="ic"><use href="#i-gauge"/></svg>Taxa de quadros</span>
+                <div class="seg" id="seg-fps" role="group" aria-label="Taxa de quadros">
+                  <button type="button" data-v="15">15</button>
+                  <button type="button" data-v="24">24</button>
+                  <button type="button" data-v="30" class="on">30</button>
+                  <button type="button" data-v="60">60 fps</button>
+                </div>
+              </div>
+              <label class="interruptor">
+                <span class="rot"><svg class="ic"><use href="#i-volume"/></svg>Compartilhar áudio</span>
+                <input type="checkbox" id="chk-audio" checked>
+                <i></i>
+              </label>
+              <p class="dica" id="dica-qualidade"></p>
+            </div>
+
+            <button id="btn-compartilhar" class="btn grande primario">
+              <svg class="ic"><use href="#i-share"/></svg>
+              Iniciar compartilhamento
+            </button>
+
+            <div class="ou"><span>ou entre em uma sala</span></div>
+            <form id="form-assistir">
+              <input id="codigo" placeholder="CÓDIGO" maxlength="6" autocomplete="off" autocapitalize="characters" aria-label="Código da sala">
+              <button type="submit" class="btn"><svg class="ic"><use href="#i-eye"/></svg>Assistir</button>
+            </form>
+          </section>
+
+          <!-- Quem compartilha: estúdio -->
+          <section id="tela-host" class="tela host" hidden>
+            <div class="barra-topo">
+              <div class="marca-mini"><img src="icons/logo.svg" width="28" height="28" alt=""><b>Transmissão</b></div>
+              <div class="status" id="host-status">Preparando…</div>
+            </div>
+
+            <div class="host-grid">
+              <div class="host-main">
+                <div class="monitor">
+                  <video id="preview" muted playsinline autoplay></video>
+                  <span class="tag tag-live"><i></i>AO VIVO</span>
+                  <span class="tag tag-tempo mono" id="host-tempo">00:00</span>
+                  <span class="tag tag-res mono" id="host-res"></span>
+                </div>
+                <div class="host-barra">
+                  <div class="grupo">
+                    <span class="rot">Tipo de conteúdo</span>
+                    <div class="seg" id="seg-conteudo" role="group" aria-label="Tipo de conteúdo">
+                      <button type="button" data-v="motion" class="on"><svg class="ic"><use href="#i-film"/></svg>Vídeo / jogo</button>
+                      <button type="button" data-v="detail"><svg class="ic"><use href="#i-type"/></svg>Texto / slides</button>
+                    </div>
+                  </div>
+                  <button id="btn-parar" class="btn perigo"><svg class="ic"><use href="#i-stop"/></svg>Encerrar</button>
+                </div>
+              </div>
+
+              <aside class="host-lado">
+                <div class="cartao sala">
+                  <small>Código da sala</small>
+                  <strong id="host-codigo" class="mono">------</strong>
+                  <button id="btn-copiar" class="btn grande primario brilho pulsa">
+                    <svg class="ic"><use href="#i-copy"/></svg><span>Copiar link da sala</span>
+                  </button>
+                  <div class="linha">
+                    <input id="host-link" readonly aria-label="Link da sala">
+                    <button id="btn-copiar-codigo" class="btn peq" title="Copiar só o código"><svg class="ic"><use href="#i-copy"/></svg>Código</button>
+                  </div>
+                  <button id="btn-enviar" class="btn" hidden><svg class="ic"><use href="#i-send"/></svg>Enviar por…</button>
+                </div>
+
+                <div class="stats">
+                  <div class="stat"><svg class="ic"><use href="#i-users"/></svg><b><span id="host-qtd">0</span>/<span id="host-max">10</span></b><small>assistindo</small></div>
+                  <div class="stat"><svg class="ic"><use href="#i-up"/></svg><b id="host-upload">0</b><small>upload</small></div>
+                  <div class="stat"><svg class="ic"><use href="#i-gauge"/></svg><b id="host-qualidade">—</b><small>qualidade</small></div>
+                </div>
+
+                <div class="cartao lista-box">
+                  <h3>Espectadores</h3>
+                  <ul id="host-lista" class="lista"></ul>
+                  <p class="vazio" id="host-vazio">Nenhum espectador conectado.</p>
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          <!-- Quem assiste -->
+          <section id="tela-viewer" class="tela viewer" hidden>
+            <div class="barra-topo">
+              <div class="marca-mini"><img src="icons/logo.svg" width="28" height="28" alt=""><b>Sala</b><span class="mono cod" id="viewer-codigo"></span></div>
+              <div class="status" id="viewer-status">Conectando…</div>
+              <button id="btn-sair" class="btn peq"><svg class="ic"><use href="#i-exit"/></svg>Sair</button>
+            </div>
+
+            <div class="palco" id="palco">
+              <div class="player" id="player">
+                <video id="remoto" playsinline autoplay></video>
+                <div class="overlay" id="overlay">
+                  <div class="carregando" id="carregando"><span class="anel"></span></div>
+                  <svg class="ic grande-ic" id="ic-aviso" hidden><use href="#i-alert"/></svg>
+                  <p id="overlay-msg">Conectando…</p>
+                  <button class="btn" id="btn-voltar" hidden>Voltar ao início</button>
+                </div>
+                <span class="tag tag-res mono" id="badge-res" hidden></span>
+                <div class="controles" id="controles">
+                  <div class="ctl-grupo">
+                    <button id="btn-som" class="ctl" title="Som (M)" aria-label="Som"><svg class="ic"><use href="#i-mute"/></svg></button>
+                    <input type="range" id="vol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
+                  </div>
+                  <div class="ctl-grupo">
+                    <button id="btn-tela-cheia" class="ctl" title="Tela cheia no monitor (F)" aria-label="Tela cheia no monitor"><svg class="ic"><use href="#i-expand"/></svg></button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="barra-vista" id="barra-vista">
+                <div class="vgrupo" id="g-tam">
+                  <span class="rot">Tamanho</span>
+                  <div class="seg" id="seg-tam">
+                    <button type="button" data-v="640">Pequeno</button>
+                    <button type="button" data-v="860">Médio</button>
+                    <button type="button" data-v="100" class="on">Grande</button>
+                  </div>
+                </div>
+                <div class="vgrupo">
+                  <span class="rot">Modo de exibição</span>
+                  <div class="seg" id="seg-modo">
+                    <button type="button" data-modo="normal" title="Vídeo dentro da página (Esc)"><svg class="ic"><use href="#i-page"/></svg>Na página</button>
+                    <button type="button" data-modo="cinema" title="Modo cinema (C)"><svg class="ic"><use href="#i-cinema"/></svg>Cinema</button>
+                    <button type="button" data-modo="janela" title="Preenche a janela do navegador (T)"><svg class="ic"><use href="#i-window"/></svg>Janela cheia</button>
+                    <button type="button" data-modo="monitor" title="Ocupa todo o monitor (F)"><svg class="ic"><use href="#i-expand"/></svg>Tela cheia</button>
+                    <button type="button" data-modo="pip" title="Janela flutuante (P)"><svg class="ic"><use href="#i-pip"/></svg>Flutuar</button>
+                  </div>
+                </div>
+                <div class="vgrupo">
+                  <span class="rot">Ajuste do vídeo</span>
+                  <div class="seg" id="seg-fit">
+                    <button type="button" data-v="contain" class="on">Ajustar</button>
+                    <button type="button" data-v="cover">Preencher</button>
+                    <button type="button" data-v="fill">Esticar</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <a class="cta-mini" href="./" target="_blank" rel="noopener">Quer transmitir a sua tela? <b>Criar uma sala em nova aba</b></a>
+          </section>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- PRODUTO: pré-visualização -->
+    <section class="bloco so-home" id="produto">
+      <div class="cab-sec">
+        <p class="sobre reveal">Produto</p>
+        <h2 class="reveal">Uma sala, um código, uma tela.</h2>
+        <p class="sub reveal d1">Quem transmite acompanha tudo em um painel: prévia, código, upload em uso e quem está conectado.</p>
+      </div>
+      <div class="mock reveal" aria-hidden="true">
+        <div class="mock-barra"><i></i><i></i><i></i><span>compartilhar-tela / transmissão</span></div>
+        <div class="mock-corpo">
+          <div class="mock-tela">
+            <span class="mk-live"><i></i>AO VIVO</span><span class="mk-t">12:34</span>
+            <div class="mk-conteudo">
+              <div class="mk-linha l1"></div><div class="mk-linha l2"></div><div class="mk-linha l3"></div><div class="mk-linha l4"></div><div class="mk-linha l5"></div>
+              <div class="mk-cursor"></div>
+            </div>
+            <span class="mk-res">1280×720 · 30 fps</span>
+          </div>
+          <div class="mock-lado">
+            <div class="mk-sala"><small>CÓDIGO DA SALA</small><b>K7M2QX</b><div class="mk-btn">Copiar link da sala</div></div>
+            <div class="mk-stats"><div><b>3/10</b><small>assistindo</small></div><div><b>6,2 Mbps</b><small>upload</small></div></div>
+            <div class="mk-viewer"><span>1</span>Espectador 1<i></i></div>
+            <div class="mk-viewer"><span>2</span>Espectador 2<i></i></div>
+            <div class="mk-viewer"><span>3</span>Espectador 3<i></i></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RECURSOS: bento -->
+    <section class="bloco so-home" id="recursos">
+      <div class="cab-sec">
+        <p class="sobre reveal">Recursos</p>
+        <h2 class="reveal">Feito para transmitir sem complicação.</h2>
+      </div>
+      <div class="bento">
+        <article class="bx bx-a reveal">
+          <div class="bx-txt">
+            <h3>Conexão direta entre navegadores</h3>
+            <p>O vídeo vai de quem transmite para quem assiste, sem passar por servidores de mídia. Menos atraso, nenhum custo de banda para o serviço e mais privacidade.</p>
+          </div>
+          <svg class="rede" viewBox="0 0 320 190" aria-hidden="true">
+            <g class="fios" fill="none" stroke-width="1.5">
+              <path d="M70 95 C 140 95, 150 35, 250 35"/>
+              <path d="M70 95 L 250 95"/>
+              <path d="M70 95 C 140 95, 150 155, 250 155"/>
+            </g>
+            <g class="nos">
+              <rect x="22" y="70" width="48" height="50" rx="10" class="no-host"/>
+              <path d="M36 88h20v14H36zM41 108h10" class="no-ic"/>
+              <circle cx="262" cy="35" r="14"/><circle cx="262" cy="95" r="14"/><circle cx="262" cy="155" r="14"/>
+            </g>
+          </svg>
+        </article>
+        <article class="bx bx-b reveal d1">
+          <h3>Qualidade configurável</h3>
+          <p>480p a 1080p, de 15 a 60 fps. O bitrate se ajusta conforme a sala enche.</p>
+          <div class="chips"><span>480p</span><span>720p</span><span>1080p</span><span>60 fps</span></div>
+        </article>
+        <article class="bx bx-c reveal d2">
+          <h3>Áudio do sistema</h3>
+          <p>Transmita a tela inteira ou uma aba junto com o som do computador.</p>
+        </article>
+        <article class="bx bx-d reveal">
+          <h3>Player completo</h3>
+          <p>Cinema, janela cheia, tela cheia, janela flutuante e ajuste de vídeo, tudo à vista.</p>
+          <div class="chips"><kbd>F</kbd><kbd>T</kbd><kbd>C</kbd><kbd>P</kbd><kbd>M</kbd><kbd>Esc</kbd></div>
+        </article>
+        <article class="bx bx-e reveal d1">
+          <h3>Acesso por código</h3>
+          <p>Cada sala tem um código aleatório de 6 caracteres. Quem não tem o código não entra, e você remove espectadores quando quiser.</p>
+        </article>
+        <article class="bx bx-f reveal d2">
+          <h3>Sem instalação</h3>
+          <p>Abra no navegador e transmita. Se preferir, instale como aplicativo.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- COMO FUNCIONA -->
+    <section class="bloco so-home" id="como">
+      <div class="cab-sec">
+        <p class="sobre reveal">Como funciona</p>
+        <h2 class="reveal">Da escolha à transmissão em três etapas.</h2>
+      </div>
+      <ol class="linha-tempo">
+        <li class="reveal"><span class="n mono">01</span><h3>Configure e inicie</h3><p>Defina resolução, taxa de quadros e áudio. O navegador pergunta qual tela ou aba será compartilhada.</p></li>
+        <li class="reveal d1"><span class="n mono">02</span><h3>Envie o link da sala</h3><p>Uma sala é criada na hora, com código e link prontos para copiar e enviar por qualquer canal.</p></li>
+        <li class="reveal d2"><span class="n mono">03</span><h3>Acompanhe ao vivo</h3><p>Os espectadores entram pelo navegador. Você vê quem está conectado e encerra quando quiser.</p></li>
+      </ol>
+    </section>
+
+    <!-- ESPECIFICAÇÕES -->
+    <section class="bloco so-home" id="specs">
+      <div class="split">
+        <div class="cab-sec">
+          <p class="sobre reveal">Especificações</p>
+          <h2 class="reveal">Os detalhes técnicos.</h2>
+          <p class="sub reveal d1">Tecnologia aberta do navegador (WebRTC), sem plugins e sem componentes proprietários.</p>
+        </div>
+        <dl class="specs reveal">
+          <div><dt>Resolução</dt><dd>480p · 720p · 1080p</dd></div>
+          <div><dt>Taxa de quadros</dt><dd>15 · 24 · 30 · 60 fps</dd></div>
+          <div><dt>Áudio</dt><dd>Sistema ou aba, estéreo</dd></div>
+          <div><dt>Espectadores</dt><dd>Até 10 por sala</dd></div>
+          <div><dt>Latência típica</dt><dd>Abaixo de 500 ms</dd></div>
+          <div><dt>Transporte</dt><dd>WebRTC ponto a ponto, criptografado (DTLS-SRTP)</dd></div>
+          <div><dt>Transmitir</dt><dd>Chrome, Edge, Opera e outros baseados em Chromium</dd></div>
+          <div><dt>Assistir</dt><dd>Qualquer navegador moderno, inclusive no celular</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="bloco so-home" id="faq">
+      <div class="split">
+        <div class="cab-sec">
+          <p class="sobre reveal">Dúvidas</p>
+          <h2 class="reveal">Perguntas frequentes</h2>
+          <p class="sub reveal d1">Não encontrou o que procurava? A maioria dos casos se resolve conferindo a rede e as permissões do navegador.</p>
+        </div>
+        <div class="faq reveal">
+          <details><summary>Preciso criar conta ou instalar algo?</summary><p>Não. Basta abrir o site. A instalação como aplicativo é opcional.</p></details>
+          <details><summary>O áudio do computador é transmitido?</summary><p>Sim, ao compartilhar a tela inteira ou uma aba e marcar a opção de áudio. Ao compartilhar uma janela específica, o navegador não envia som.</p></details>
+          <details><summary>Qual resolução e fps devo escolher?</summary><p>720p a 30 fps é o equilíbrio ideal. Use 1080p ou 60 fps apenas com bom upload e poucos espectadores, pois cada pessoa a mais consome upload.</p></details>
+          <details><summary>Quantas pessoas podem assistir?</summary><p>Até 10. A qualidade é reduzida automaticamente quando a sala enche, para não sobrecarregar a conexão de quem transmite.</p></details>
+          <details><summary>Alguém consegue ver minha tela sem eu saber?</summary><p>Não. O navegador sempre pergunta o que será compartilhado e exibe um aviso durante a transmissão. Só entra quem tem o código da sala.</p></details>
+          <details><summary>Não conecta para algumas pessoas. Por quê?</summary><p>Algumas redes (corporativas ou de celular com restrições) bloqueiam a conexão direta. Tentar por outra rede costuma resolver.</p></details>
+          <details><summary>Funciona no celular?</summary><p>Assistir funciona. Transmitir a tela depende do navegador do aparelho, e a maioria dos celulares não oferece essa função.</p></details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="rodape so-home">
+    <div class="rodape-topo">
+      <a class="logo" href="./"><img src="icons/logo.svg" width="32" height="32" alt=""><span class="marca">Compartilhar Tela</span></a>
+      <p>Transmissão de tela e áudio no navegador, sem cadastro e sem servidor de vídeo.</p>
+    </div>
+    <div class="rodape-base">
+      <span>© 2026 Compartilhar Tela</span>
+      <span class="dev">Desenvolvido por <b>Endrigo Costa</b></span>
+    </div>
+  </footer>
+
+  <script src="vendor/peerjs.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
