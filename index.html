@@ -65,7 +65,10 @@
       <a href="#specs">Especificações</a>
       <a href="#faq">Dúvidas</a>
     </nav>
-    <button id="btn-instalar" class="btn peq" hidden><svg class="ic"><use href="#i-download"/></svg>Instalar app</button>
+    <div class="topo-acoes">
+      <button id="btn-instalar" class="btn peq" hidden><svg class="ic"><use href="#i-download"/></svg>Instalar app</button>
+      <a class="btn peq primario" href="#inicio">Transmitir agora</a>
+    </div>
   </header>
 
   <main id="inicio">
@@ -80,6 +83,11 @@
           <li>Áudio do sistema</li>
           <li>Criptografia de ponta a ponta</li>
         </ul>
+        <div class="hero-acoes reveal d3">
+          <a class="link-seta" href="#como">Ver como funciona <svg class="ic"><use href="#i-arrow"/></svg></a>
+          <span class="sep"></span>
+          <span class="nota">Sem cadastro · Sem instalação</span>
+        </div>
       </div>
 
       <div class="painel-wrap reveal d2" id="painel-wrap">
@@ -248,44 +256,73 @@
       </div>
     </section>
 
-    <!-- PRODUTO: pré-visualização -->
+    <!-- FAIXA DE COMPATIBILIDADE -->
+    <div class="faixa so-home" aria-label="Compatibilidade">
+      <span class="faixa-rot">Compatível com</span>
+      <div class="faixa-trilho">
+        <div class="faixa-lista">
+          <span>Google Chrome</span><span>Microsoft Edge</span><span>Opera</span><span>Opera GX</span><span>Brave</span><span>Vivaldi</span><span>Firefox <em>(assistir)</em></span><span>Safari <em>(assistir)</em></span>
+          <span>Google Chrome</span><span>Microsoft Edge</span><span>Opera</span><span>Opera GX</span><span>Brave</span><span>Vivaldi</span><span>Firefox <em>(assistir)</em></span><span>Safari <em>(assistir)</em></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRODUTO -->
     <section class="bloco so-home" id="produto">
       <div class="cab-sec">
-        <p class="sobre reveal">Produto</p>
+        <p class="sobre reveal"><span class="mono">01</span>Produto</p>
         <h2 class="reveal">Uma sala, um código, uma tela.</h2>
         <p class="sub reveal d1">Quem transmite acompanha tudo em um painel: prévia, código, upload em uso e quem está conectado.</p>
       </div>
-      <div class="mock reveal" aria-hidden="true">
-        <div class="mock-barra"><i></i><i></i><i></i><span>compartilhar-tela / transmissão</span></div>
-        <div class="mock-corpo">
-          <div class="mock-tela">
-            <span class="mk-live"><i></i>AO VIVO</span><span class="mk-t">12:34</span>
-            <div class="mk-conteudo">
-              <div class="mk-linha l1"></div><div class="mk-linha l2"></div><div class="mk-linha l3"></div><div class="mk-linha l4"></div><div class="mk-linha l5"></div>
-              <div class="mk-cursor"></div>
+      <div class="mock-cena reveal">
+        <div class="mock" aria-hidden="true">
+          <div class="mock-barra"><i></i><i></i><i></i><span>compartilhar-tela / transmissão</span></div>
+          <div class="mock-corpo">
+            <div class="mock-tela">
+              <span class="mk-live"><i></i>AO VIVO</span><span class="mk-t">12:34</span>
+              <div class="mk-abas"><span class="on">index.html</span><span>app.js</span><span>style.css</span></div>
+              <div class="mk-conteudo">
+                <div class="mk-linha c1" style="width:34%"></div>
+                <div class="mk-linha c2" style="width:72%;animation-delay:.2s"></div>
+                <div class="mk-linha c3" style="width:58%;animation-delay:.4s"></div>
+                <div class="mk-linha" style="width:82%;animation-delay:.6s"></div>
+                <div class="mk-linha c2" style="width:46%;animation-delay:.8s"></div>
+                <div class="mk-linha" style="width:68%;animation-delay:1s"></div>
+                <div class="mk-linha c1" style="width:40%;animation-delay:1.2s"></div>
+                <div class="mk-cursor"></div>
+              </div>
+              <span class="mk-res">1280×720 · 30 fps</span>
             </div>
-            <span class="mk-res">1280×720 · 30 fps</span>
-          </div>
-          <div class="mock-lado">
-            <div class="mk-sala"><small>CÓDIGO DA SALA</small><b>K7M2QX</b><div class="mk-btn">Copiar link da sala</div></div>
-            <div class="mk-stats"><div><b>3/10</b><small>assistindo</small></div><div><b>6,2 Mbps</b><small>upload</small></div></div>
-            <div class="mk-viewer"><span>1</span>Espectador 1<i></i></div>
-            <div class="mk-viewer"><span>2</span>Espectador 2<i></i></div>
-            <div class="mk-viewer"><span>3</span>Espectador 3<i></i></div>
+            <div class="mock-lado">
+              <div class="mk-sala"><b class="mk-marca">1</b><small>CÓDIGO DA SALA</small><strong>K7M2QX</strong><div class="mk-btn">Copiar link da sala</div></div>
+              <div class="mk-stats"><b class="mk-marca">2</b><div><b>3/10</b><small>assistindo</small></div><div><b>6,2 Mbps</b><small>upload</small></div></div>
+              <div class="mk-lista"><b class="mk-marca">3</b>
+                <div class="mk-viewer"><span>1</span>Espectador 1<i></i></div>
+                <div class="mk-viewer"><span>2</span>Espectador 2<i></i></div>
+                <div class="mk-viewer"><span>3</span>Espectador 3<i></i></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+      <ol class="legenda">
+        <li class="reveal"><b>1</b><div><h3>Código e link da sala</h3><p>Um clique copia o link para enviar por qualquer canal.</p></div></li>
+        <li class="reveal d1"><b>2</b><div><h3>Consumo de upload</h3><p>Veja quanto da sua conexão está em uso e a qualidade aplicada.</p></div></li>
+        <li class="reveal d2"><b>3</b><div><h3>Controle dos espectadores</h3><p>Acompanhe quem está conectado e remova quem não deve estar.</p></div></li>
+      </ol>
     </section>
 
-    <!-- RECURSOS: bento -->
+    <!-- RECURSOS -->
     <section class="bloco so-home" id="recursos">
       <div class="cab-sec">
-        <p class="sobre reveal">Recursos</p>
+        <p class="sobre reveal"><span class="mono">02</span>Recursos</p>
         <h2 class="reveal">Feito para transmitir sem complicação.</h2>
+        <p class="sub reveal d1">Tudo o que importa para mostrar a tela com qualidade, e nada além disso.</p>
       </div>
       <div class="bento">
         <article class="bx bx-a reveal">
           <div class="bx-txt">
+            <span class="bx-ico"><svg class="ic"><use href="#i-zap"/></svg></span>
             <h3>Conexão direta entre navegadores</h3>
             <p>O vídeo vai de quem transmite para quem assiste, sem passar por servidores de mídia. Menos atraso, nenhum custo de banda para o serviço e mais privacidade.</p>
           </div>
@@ -303,34 +340,53 @@
           </svg>
         </article>
         <article class="bx bx-b reveal d1">
+          <span class="bx-ico"><svg class="ic"><use href="#i-sliders"/></svg></span>
           <h3>Qualidade configurável</h3>
           <p>480p a 1080p, de 15 a 60 fps. O bitrate se ajusta conforme a sala enche.</p>
           <div class="chips"><span>480p</span><span>720p</span><span>1080p</span><span>60 fps</span></div>
         </article>
         <article class="bx bx-c reveal d2">
+          <span class="bx-ico"><svg class="ic"><use href="#i-volume"/></svg></span>
           <h3>Áudio do sistema</h3>
           <p>Transmita a tela inteira ou uma aba junto com o som do computador.</p>
         </article>
         <article class="bx bx-d reveal">
+          <span class="bx-ico"><svg class="ic"><use href="#i-cinema"/></svg></span>
           <h3>Player completo</h3>
           <p>Cinema, janela cheia, tela cheia, janela flutuante e ajuste de vídeo, tudo à vista.</p>
           <div class="chips"><kbd>F</kbd><kbd>T</kbd><kbd>C</kbd><kbd>P</kbd><kbd>M</kbd><kbd>Esc</kbd></div>
         </article>
         <article class="bx bx-e reveal d1">
+          <span class="bx-ico"><svg class="ic"><use href="#i-lock"/></svg></span>
           <h3>Acesso por código</h3>
           <p>Cada sala tem um código aleatório de 6 caracteres. Quem não tem o código não entra, e você remove espectadores quando quiser.</p>
         </article>
         <article class="bx bx-f reveal d2">
+          <span class="bx-ico"><svg class="ic"><use href="#i-download"/></svg></span>
           <h3>Sem instalação</h3>
           <p>Abra no navegador e transmita. Se preferir, instale como aplicativo.</p>
         </article>
       </div>
     </section>
 
+    <!-- CASOS DE USO -->
+    <section class="bloco so-home" id="usos">
+      <div class="cab-sec">
+        <p class="sobre reveal"><span class="mono">03</span>Casos de uso</p>
+        <h2 class="reveal">Para quem precisa mostrar a tela, sem burocracia.</h2>
+      </div>
+      <div class="usos">
+        <div class="uso reveal"><svg class="ic"><use href="#i-eye"/></svg><h3>Aulas e treinamentos</h3><p>Mostre exercícios e demonstrações ao vivo para uma turma.</p></div>
+        <div class="uso reveal d1"><svg class="ic"><use href="#i-users"/></svg><h3>Suporte técnico</h3><p>Acompanhe o problema na tela do cliente sem instalar nada.</p></div>
+        <div class="uso reveal d2"><svg class="ic"><use href="#i-share"/></svg><h3>Revisões e apresentações</h3><p>Apresente documentos, designs e código para a equipe.</p></div>
+        <div class="uso reveal d3"><svg class="ic"><use href="#i-film"/></svg><h3>Jogos e vídeos</h3><p>Transmita com áudio e 60 fps para os amigos assistirem juntos.</p></div>
+      </div>
+    </section>
+
     <!-- COMO FUNCIONA -->
     <section class="bloco so-home" id="como">
       <div class="cab-sec">
-        <p class="sobre reveal">Como funciona</p>
+        <p class="sobre reveal"><span class="mono">04</span>Como funciona</p>
         <h2 class="reveal">Da escolha à transmissão em três etapas.</h2>
       </div>
       <ol class="linha-tempo">
@@ -344,7 +400,7 @@
     <section class="bloco so-home" id="specs">
       <div class="split">
         <div class="cab-sec">
-          <p class="sobre reveal">Especificações</p>
+          <p class="sobre reveal"><span class="mono">05</span>Especificações</p>
           <h2 class="reveal">Os detalhes técnicos.</h2>
           <p class="sub reveal d1">Tecnologia aberta do navegador (WebRTC), sem plugins e sem componentes proprietários.</p>
         </div>
@@ -365,7 +421,7 @@
     <section class="bloco so-home" id="faq">
       <div class="split">
         <div class="cab-sec">
-          <p class="sobre reveal">Dúvidas</p>
+          <p class="sobre reveal"><span class="mono">06</span>Dúvidas</p>
           <h2 class="reveal">Perguntas frequentes</h2>
           <p class="sub reveal d1">Não encontrou o que procurava? A maioria dos casos se resolve conferindo a rede e as permissões do navegador.</p>
         </div>
@@ -380,12 +436,35 @@
         </div>
       </div>
     </section>
+
+    <!-- CHAMADA FINAL -->
+    <section class="cta so-home reveal">
+      <div class="cta-in">
+        <h2>Pronto para transmitir?</h2>
+        <p>Crie uma sala em segundos. Sem cadastro e sem instalação.</p>
+        <a class="btn grande primario brilho" href="#inicio"><svg class="ic"><use href="#i-share"/></svg>Iniciar uma transmissão</a>
+      </div>
+    </section>
   </main>
 
   <footer class="rodape so-home">
-    <div class="rodape-topo">
-      <a class="logo" href="./"><img src="icons/logo.svg" width="32" height="32" alt=""><span class="marca">Compartilhar Tela</span></a>
-      <p>Transmissão de tela e áudio no navegador, sem cadastro e sem servidor de vídeo.</p>
+    <div class="rodape-grid">
+      <div class="rodape-marca">
+        <a class="logo" href="./"><img src="icons/logo.svg" width="32" height="32" alt=""><span class="marca">Compartilhar Tela</span></a>
+        <p>Transmissão de tela e áudio no navegador, sem cadastro e sem servidor de vídeo.</p>
+      </div>
+      <nav class="rodape-col" aria-label="Produto">
+        <h4>Produto</h4>
+        <a href="#produto">Visão geral</a><a href="#recursos">Recursos</a><a href="#usos">Casos de uso</a><a href="#specs">Especificações</a>
+      </nav>
+      <nav class="rodape-col" aria-label="Ajuda">
+        <h4>Ajuda</h4>
+        <a href="#como">Como funciona</a><a href="#faq">Perguntas frequentes</a><a href="#inicio">Iniciar transmissão</a>
+      </nav>
+      <nav class="rodape-col" aria-label="Desenvolvedor">
+        <h4>Desenvolvedor</h4>
+        <a href="https://github.com/endrigocostaluiz" target="_blank" rel="noopener">GitHub · Endrigo Costa</a>
+      </nav>
     </div>
     <div class="rodape-base">
       <span>© 2026 Compartilhar Tela</span>

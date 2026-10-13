@@ -632,3 +632,12 @@ $('btn-instalar').onclick = async () => {
   promptInstalar = null;
   $('btn-instalar').hidden = true;
 };
+
+// Destaque de luz que acompanha o mouse nos cards da página inicial
+document.addEventListener('mousemove', (e) => {
+  const alvo = e.target.closest && e.target.closest('.bx, .uso');
+  if (!alvo) return;
+  const r = alvo.getBoundingClientRect();
+  alvo.style.setProperty('--mx', e.clientX - r.left + 'px');
+  alvo.style.setProperty('--my', e.clientY - r.top + 'px');
+}, { passive: true });
