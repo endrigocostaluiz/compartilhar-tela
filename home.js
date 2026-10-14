@@ -1,9 +1,9 @@
 'use strict';
-// Interações da home v2: seção ativa no trilho, abas de recursos e calculadora de upload.
+// Interações da home: seção ativa no menu, abas de recursos e calculadora de upload.
 
 // ---- Trilho lateral: destaca a seção visível ----
 (function () {
-  const links = document.querySelectorAll('.trilho-nav a');
+  const links = document.querySelectorAll('.menu-nav a');
   const secoes = [...links].map((a) => document.getElementById(a.dataset.sec)).filter(Boolean);
   if (!('IntersectionObserver' in window) || !secoes.length) return;
   const obs = new IntersectionObserver((es) => {

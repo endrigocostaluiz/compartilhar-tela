@@ -3,8 +3,6 @@
    Usa style.css como base (componentes do app) e redefine só a página inicial.
    Desenvolvido por Endrigo Costa
    ======================================================== */
-body.v2 { padding-left: 76px; }
-body.v2.foco { padding-left: 0; }
 
 /* Fundo: aurora + pontos */
 .v2-fundo { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
@@ -15,25 +13,17 @@ body.v2.foco { padding-left: 0; }
 @keyframes aur1 { to { transform: translate(8vw, 6vh) scale(1.12); } }
 @keyframes aur2 { to { transform: translate(-10vw, -8vh) scale(1.2); } }
 
-/* Trilho lateral */
-.trilho { position: fixed; z-index: 50; left: 0; top: 0; bottom: 0; width: 76px; display: flex; flex-direction: column; align-items: center; padding: 20px 0; gap: 28px; background: rgba(7,9,14,.72); border-right: 1px solid var(--borda); backdrop-filter: blur(16px); }
-.trilho-logo img { border-radius: 11px; box-shadow: 0 0 18px var(--glow); transition: transform .3s var(--ease); display: block; }
-.trilho-logo:hover img { transform: rotate(-6deg) scale(1.06); }
-.trilho-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; justify-content: center; }
-.trilho-nav a, .trilho-instalar { position: relative; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 12px; color: var(--dim); transition: color .2s, background .2s; }
-.trilho-nav a .ic, .trilho-instalar .ic { width: 20px; height: 20px; }
-.trilho-nav a:hover, .trilho-instalar:hover { color: #fff; background: rgba(255,255,255,.07); }
-.trilho-nav a.ativo { color: var(--em2); background: rgba(16,185,129,.14); }
-.trilho-nav a.ativo::before { content: ''; position: absolute; left: -15px; top: 11px; bottom: 11px; width: 3px; border-radius: 0 3px 3px 0; background: var(--em); box-shadow: 0 0 10px var(--em); }
-.trilho-nav a span { position: absolute; left: 58px; padding: 5px 11px; border-radius: 8px; font-size: .8rem; font-weight: 600; white-space: nowrap; color: #fff; background: rgba(13,18,31,.96); border: 1px solid var(--borda-forte); opacity: 0; transform: translateX(-6px); pointer-events: none; transition: all .2s; }
-.trilho-nav a:hover span { opacity: 1; transform: none; }
-.trilho-instalar { background: none; border: 0; cursor: pointer; padding: 0; }
-.v2-topbar { display: none; }
+/* Menu superior */
+.menu-topo { position: sticky; top: 0; z-index: 60; background: rgba(7,9,14,.78); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid var(--borda); }
+.menu-in { max-width: 1240px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.menu-nav a.ativo { color: #fff; background: rgba(16,185,129,.18); box-shadow: inset 0 0 0 1px rgba(16,185,129,.4); }
+.menu-acoes { display: flex; align-items: center; gap: 10px; }
+.menu-acoes .primario { box-shadow: 0 2px 12px var(--glow); }
 
 main { max-width: none; padding: 0; }
 
 /* Hero centralizado */
-.v2-hero { position: relative; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 70px 32px 90px; }
+.v2-hero { position: relative; min-height: calc(100vh - 62px); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 70px 32px 90px; }
 .v2-hero-txt { max-width: 980px; }
 .v2-tag { display: inline-block; font-size: .76rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; padding: 6px 14px; border-radius: 999px; color: var(--em2); background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.3); }
 .v2-hero h1 { font-size: clamp(2.5rem, 6.2vw, 5rem); font-weight: 700; line-height: 1.04; letter-spacing: -.045em; margin: 26px 0 22px; }
@@ -62,7 +52,7 @@ body.foco.transmitindo .v2-cmd-wrap { max-width: 1180px; }
 body.foco.assistindo .v2-cmd-wrap { max-width: 1100px; }
 
 /* Seções */
-.v2-sec { max-width: 1180px; margin: 0 auto; padding: 130px 32px 0; scroll-margin-top: 20px; }
+.v2-sec { max-width: 1180px; margin: 0 auto; padding: 130px 32px 0; scroll-margin-top: 80px; }
 .v2-cab { text-align: center; max-width: 700px; margin: 0 auto 60px; }
 .v2-rot { display: inline-block; font-size: .74rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--em2); padding: 5px 12px; border-radius: 6px; background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.26); }
 .v2-cab h2, .v2-rede-txt h2 { font-size: clamp(2rem, 4.2vw, 3.2rem); font-weight: 700; letter-spacing: -.035em; line-height: 1.1; margin: 18px 0 14px; }
@@ -186,9 +176,8 @@ body.foco.assistindo .v2-cmd-wrap { max-width: 1100px; }
   .j-corpo { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
-  body.v2 { padding-left: 0; }
-  .trilho { display: none; }
-  .v2-topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; position: sticky; top: 0; z-index: 40; background: rgba(7,9,14,.85); backdrop-filter: blur(14px); border-bottom: 1px solid var(--borda); }
+  .menu-nav { display: none; }
+  .menu-in { padding: 10px 16px; }
   .v2-hero { min-height: 0; padding: 50px 16px 70px; }
   .v2-rolar { display: none; }
   .v2-sec { padding: 90px 16px 0; }
