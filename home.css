@@ -191,3 +191,11 @@ body.foco.assistindo .v2-cmd-wrap { max-width: 1100px; }
   .v2-entrar { flex-direction: column; align-items: stretch; }
   .v2-entrar form { width: 100%; }
 }
+
+/* Voltar ao topo */
+.ao-topo { position: fixed; right: 24px; bottom: 24px; z-index: 55; width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; cursor: pointer; padding: 0; color: #03150e; border: 0; background: linear-gradient(135deg, var(--em2), var(--em)); box-shadow: 0 8px 26px rgba(16,185,129,.45); opacity: 0; transform: translateY(16px) scale(.9); pointer-events: none; transition: opacity .3s var(--ease), transform .3s var(--ease), box-shadow .2s; }
+.ao-topo.visivel { opacity: 1; transform: none; pointer-events: auto; }
+.ao-topo:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(16,185,129,.65); }
+.ao-topo:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.ao-topo .ic { width: 22px; height: 22px; stroke-width: 2.6; }
+@media (max-width: 620px) { .ao-topo { right: 16px; bottom: 16px; width: 44px; height: 44px; } }

@@ -76,3 +76,13 @@
   $('c-n').addEventListener('input', (e) => { est.n = Number(e.target.value); calcular(); });
   calcular();
 })();
+
+// ---- Botão "voltar ao topo" ----
+(function () {
+  const btn = document.getElementById("ao-topo");
+  if (!btn) return;
+  const atualizar = () => btn.classList.toggle("visivel", window.scrollY > 600);
+  window.addEventListener("scroll", atualizar, { passive: true });
+  btn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+  atualizar();
+})();
