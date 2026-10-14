@@ -344,6 +344,7 @@ function assistir(codigo) {
   codigo = limparCodigo(codigo);
   if (codigo.length !== 6) return alert('Informe o código de 6 caracteres.');
   mostrar('tela-viewer');
+  definirModo('cinema'); // modo padrão de quem assiste
   const st = $('viewer-status');
   const video = $('remoto');
   video.srcObject = null;
@@ -451,6 +452,7 @@ $('form-assistir').onsubmit = (e) => { e.preventDefault(); assistir($('codigo').
 $('codigo').oninput = (e) => { e.target.value = limparCodigo(e.target.value); };
 $('btn-sair').onclick = sairViewer;
 $('btn-voltar').onclick = sairViewer;
+$('btn-sair-vista').onclick = sairViewer;
 
 // ---------- Player: som, modos de exibição, ajuste e tamanho ----------
 const prefs = { vol: 1, fit: 'contain', tam: '100' };

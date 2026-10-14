@@ -449,3 +449,5 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
   .mock { transform: none; }
   .cta-in { padding: 48px 20px; }
 }
+
+.sair-vista { margin-left: auto; align-self: flex-end; }
