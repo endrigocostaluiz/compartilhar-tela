@@ -3,13 +3,175 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Compartilhar Tela — sua tela, em tempo real</title>
-  <meta name="description" content="Transmita sua tela e o áudio do computador para até 10 pessoas, direto do navegador. Sem conta, sem instalação e sem servidor de vídeo.">
+  <title>Compartilhar Tela Online com Áudio — Grátis, sem Instalar</title>
+  <meta name="description" content="Compartilhe a tela do computador com áudio em tempo real, direto no navegador. Grátis, sem cadastro e sem instalar. Até 10 espectadores, 1080p e 60 fps.">
+  <meta name="keywords" content="compartilhar tela, compartilhar tela online, compartilhar tela com áudio, transmitir tela, compartilhamento de tela grátis, compartilhar tela sem instalar, compartilhar tela navegador, WebRTC">
   <meta name="author" content="Endrigo Costa">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+  <link rel="canonical" href="https://endrigocostaluiz.github.io/compartilhar-tela/">
   <meta name="theme-color" content="#07090e">
+  <meta name="application-name" content="Compartilhar Tela">
+  <meta name="apple-mobile-web-app-title" content="Compartilhar Tela">
+
+  <!-- Open Graph (WhatsApp, Facebook, LinkedIn, Discord) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Compartilhar Tela">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:url" content="https://endrigocostaluiz.github.io/compartilhar-tela/">
+  <meta property="og:title" content="Compartilhar Tela Online com Áudio — Grátis, sem Instalar">
+  <meta property="og:description" content="Mostre sua tela e o som do computador em tempo real, direto no navegador. Grátis, sem cadastro e para até 10 pessoas.">
+  <meta property="og:image" content="https://endrigocostaluiz.github.io/compartilhar-tela/assets/og-image.png">
+  <meta property="og:image:secure_url" content="https://endrigocostaluiz.github.io/compartilhar-tela/assets/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Compartilhar Tela: transmissão de tela e áudio em tempo real no navegador">
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Compartilhar Tela Online com Áudio — Grátis, sem Instalar">
+  <meta name="twitter:description" content="Mostre sua tela e o som do computador em tempo real, direto no navegador. Grátis, sem cadastro e para até 10 pessoas.">
+  <meta name="twitter:image" content="https://endrigocostaluiz.github.io/compartilhar-tela/assets/og-image.png">
+  <meta name="twitter:image:alt" content="Compartilhar Tela: transmissão de tela e áudio em tempo real no navegador">
+
+  <!-- Ícones e PWA -->
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="icons/logo.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <!-- Dados estruturados (JSON-LD) -->
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://endrigocostaluiz.github.io/compartilhar-tela/#site",
+      "url": "https://endrigocostaluiz.github.io/compartilhar-tela/",
+      "name": "Compartilhar Tela",
+      "inLanguage": "pt-BR",
+      "publisher": {
+        "@id": "https://endrigocostaluiz.github.io/compartilhar-tela/#autor"
+      }
+    },
+    {
+      "@type": "Person",
+      "@id": "https://endrigocostaluiz.github.io/compartilhar-tela/#autor",
+      "name": "Endrigo Costa",
+      "url": "https://github.com/endrigocostaluiz"
+    },
+    {
+      "@type": "WebApplication",
+      "@id": "https://endrigocostaluiz.github.io/compartilhar-tela/#app",
+      "name": "Compartilhar Tela",
+      "url": "https://endrigocostaluiz.github.io/compartilhar-tela/",
+      "inLanguage": "pt-BR",
+      "description": "Compartilhe a tela do computador com áudio em tempo real, direto no navegador. Grátis, sem cadastro e sem instalar, para até 10 espectadores.",
+      "applicationCategory": "MultimediaApplication",
+      "applicationSubCategory": "Compartilhamento de tela",
+      "operatingSystem": "Windows, macOS, Linux, ChromeOS (navegador)",
+      "browserRequirements": "Requer navegador com suporte a WebRTC (Chrome, Edge, Opera, Firefox).",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "BRL"
+      },
+      "image": "https://endrigocostaluiz.github.io/compartilhar-tela/assets/og-image.png",
+      "author": {
+        "@id": "https://endrigocostaluiz.github.io/compartilhar-tela/#autor"
+      },
+      "featureList": [
+        "Compartilhamento de tela e áudio em tempo real",
+        "Resolução de 480p a 1080p e de 15 a 60 fps",
+        "Até 10 espectadores por sala",
+        "Conexão direta entre navegadores (WebRTC)",
+        "Sem cadastro e sem instalação",
+        "Modo cinema, tela cheia e janela flutuante para quem assiste"
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://endrigocostaluiz.github.io/compartilhar-tela/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "O Compartilhar Tela é gratuito?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sim. É gratuito, não exige cadastro e não limita o tempo de transmissão. Você só depende da sua conexão de internet."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Como compartilhar a tela do computador com áudio?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Clique em \"Iniciar transmissão\", escolha compartilhar a tela inteira ou uma aba e marque a opção de compartilhar áudio na janela do navegador. Depois, envie o link da sala para quem for assistir."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Preciso criar conta ou instalar algo?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Não. Basta abrir o site. A instalação como aplicativo é opcional."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "O áudio do computador é transmitido?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sim, ao compartilhar a tela inteira ou uma aba e marcar a opção de áudio. Ao compartilhar uma janela específica, o navegador não envia som."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Qual resolução e fps devo escolher?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "720p a 30 fps é o equilíbrio ideal. Use 1080p ou 60 fps apenas com bom upload e poucos espectadores. A calculadora acima ajuda a estimar."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Quantas pessoas podem assistir?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Até 10. A qualidade é reduzida automaticamente quando a sala enche, para não sobrecarregar a conexão de quem transmite."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Alguém consegue ver minha tela sem eu saber?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Não. O navegador sempre pergunta o que será compartilhado e exibe um aviso durante a transmissão. Só entra quem tem o código da sala."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Não conecta para algumas pessoas. Por quê?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Algumas redes (corporativas ou de celular com restrições) bloqueiam a conexão direta. Tentar por outra rede costuma resolver."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Funciona no celular?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Assistir funciona. Transmitir a tela depende do navegador do aparelho, e a maioria dos celulares não oferece essa função."
+          }
+        }
+      ]
+    }
+  ]
+}
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -84,7 +246,7 @@
       <div class="v2-hero-txt so-home">
         <span class="v2-tag reveal">Transmissão de tela e áudio · WebRTC</span>
         <h1 class="reveal d1">Sua tela, na tela de quem você quiser. <span class="v2-acento">Em tempo real.</span></h1>
-        <p class="reveal d2">Sem conta, sem instalação e sem servidor de vídeo. Escolha a qualidade, envie o link e transmita para até 10 pessoas direto do navegador.</p>
+        <p class="reveal d2">Compartilhe a tela do computador com áudio, direto no navegador: sem conta, sem instalação e sem servidor de vídeo. Escolha a qualidade, envie o link e transmita para até 10 pessoas.</p>
       </div>
 
       <div class="painel-wrap v2-cmd-wrap reveal d3" id="painel-wrap">
@@ -415,6 +577,8 @@
         <h2>Perguntas frequentes</h2>
       </header>
       <div class="v2-faq reveal">
+        <details><summary>O Compartilhar Tela é gratuito?</summary><p>Sim. É gratuito, não exige cadastro e não limita o tempo de transmissão. Você só depende da sua conexão de internet.</p></details>
+        <details><summary>Como compartilhar a tela do computador com áudio?</summary><p>Clique em "Iniciar transmissão", escolha compartilhar a tela inteira ou uma aba e marque a opção de compartilhar áudio na janela do navegador. Depois, envie o link da sala para quem for assistir.</p></details>
         <details><summary>Preciso criar conta ou instalar algo?</summary><p>Não. Basta abrir o site. A instalação como aplicativo é opcional.</p></details>
         <details><summary>O áudio do computador é transmitido?</summary><p>Sim, ao compartilhar a tela inteira ou uma aba e marcar a opção de áudio. Ao compartilhar uma janela específica, o navegador não envia som.</p></details>
         <details><summary>Qual resolução e fps devo escolher?</summary><p>720p a 30 fps é o equilíbrio ideal. Use 1080p ou 60 fps apenas com bom upload e poucos espectadores. A calculadora acima ajuda a estimar.</p></details>

@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+# Links de sala (?sala=CODIGO) são temporários e não devem ser indexados
+Disallow: /*?sala=
+
+Sitemap: https://endrigocostaluiz.github.io/compartilhar-tela/sitemap.xml

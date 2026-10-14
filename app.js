@@ -605,7 +605,13 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
 
 // Entrar direto por link ?sala=CODIGO (página focada só no player)
 const salaUrl = new URLSearchParams(location.search).get('sala');
-if (salaUrl) assistir(salaUrl);
+if (salaUrl) {
+  // links de sala são temporários: não devem aparecer no Google
+  const robots = document.createElement('meta');
+  robots.name = 'robots'; robots.content = 'noindex, nofollow';
+  document.head.append(robots);
+  assistir(salaUrl);
+}
 
 // Animações de entrada ao rolar
 (function () {
