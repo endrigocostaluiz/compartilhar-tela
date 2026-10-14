@@ -1,6 +1,6 @@
 // Service worker: só guarda o "casco" do app para instalação/abertura rápida.
 // Nunca intercepta WebSocket/WebRTC (não passam pelo fetch do SW).
-const CACHE = 'compartilhar-tela-v11';
+const CACHE = 'compartilhar-tela-v12';
 const ARQUIVOS = [
   './',
   './index.html',
@@ -13,6 +13,7 @@ const ARQUIVOS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/logo.svg',
+  './favicon.ico',
 ];
 
 self.addEventListener('install', (e) => {
