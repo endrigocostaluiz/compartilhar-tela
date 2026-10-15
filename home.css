@@ -267,3 +267,19 @@ html.app-instalado body.foco .v2-hero { min-height: 0; }
 /* "Voltar ao app": só aparece com a página completa aberta dentro do app instalado */
 #voltar-app { display: none; }
 html.modo-site #voltar-app { display: inline-flex; }
+
+/* App instalado: os controles ocupam toda a largura do cartão (em vez de ficarem colados à esquerda) */
+html.app-instalado .v2-cmd-linha { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 20px; align-items: end; }
+html.app-instalado .v2-cmd-linha .grupo { width: 100%; min-width: 0; }
+html.app-instalado .v2-cmd-linha .seg { width: 100%; }
+html.app-instalado .v2-cmd-linha .seg button { flex: 1 1 0; min-width: 0; }
+html.app-instalado .v2-cmd-linha .v2-audio-grupo { grid-column: 1 / -1; }
+html.app-instalado .v2-cmd-linha .v2-audio-grupo .seg button { flex: 1 1 auto; }
+html.app-instalado .v2-cmd-linha #btn-compartilhar { grid-column: 1 / -1; flex: none; margin-left: 0; width: 100%; }
+html.app-instalado .v2-entrar form { flex: 1 1 280px; width: auto; max-width: 440px; }
+@media (max-width: 560px) {
+  html.app-instalado .v2-cmd-linha { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  html.app-instalado .v2-entrar form { flex: none; width: 100%; max-width: none; }
+}
