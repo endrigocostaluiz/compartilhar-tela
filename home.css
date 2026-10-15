@@ -199,3 +199,21 @@ body.foco.assistindo .v2-cmd-wrap { max-width: 1100px; }
 .ao-topo:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .ao-topo .ic { width: 22px; height: 22px; stroke-width: 2.6; }
 @media (max-width: 620px) { .ao-topo { right: 16px; bottom: 16px; width: 44px; height: 44px; } }
+
+/* ===== Modo simplificado: app instalado (ou ?app=1) =====
+   Só o painel de transmissão/assistir, sem a página de apresentação. */
+.app-barra { display: none; }
+html.app-instalado .so-home { display: none !important; }
+html.app-instalado .ao-topo { display: none !important; }
+html.app-instalado .app-barra { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--borda); background: rgba(7,9,14,.7); backdrop-filter: blur(14px); position: sticky; top: 0; z-index: 40; }
+html.app-instalado .app-barra img { border-radius: 8px; box-shadow: 0 0 14px var(--glow); }
+html.app-instalado .app-barra strong { font-weight: 700; letter-spacing: -.01em; }
+html.app-instalado .app-barra span { margin-left: auto; font-size: .74rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+html.app-instalado body.foco .app-barra { display: none; }
+html.app-instalado .v2-hero { min-height: calc(100vh - 56px); display: flex; align-items: center; justify-content: center; padding: 24px 20px; }
+html.app-instalado .v2-cmd-wrap { margin-top: 0; max-width: 760px; }
+html.app-instalado body.foco .v2-hero { min-height: 0; display: block; padding: 20px; }
+html.app-instalado body.foco.transmitindo .v2-cmd-wrap { max-width: 1180px; }
+html.app-instalado body.foco.assistindo .v2-cmd-wrap { max-width: 1100px; }
+html.app-instalado .v2-cmd-linha { gap: 16px; }
+html.app-instalado .v2-cmd-linha #btn-compartilhar { flex-basis: 100%; margin-left: 0; }
