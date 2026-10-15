@@ -539,6 +539,14 @@ function pararHost() {
   mostrar('tela-inicio');
 }
 
+// Prévia local só enquanto a janela está visível: com o jogo na frente ela não gasta decodificação/GPU à toa.
+document.addEventListener('visibilitychange', () => {
+  if (!host) return;
+  const pv = $('preview');
+  if (document.hidden) pv.srcObject = null;
+  else if (!pv.srcObject) pv.srcObject = host.stream;
+});
+
 // ---------- Quem assiste ----------
 let viewer = null; // { peer, conn, call, ok }
 
