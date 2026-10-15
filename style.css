@@ -473,3 +473,9 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
 #btn-auto.desligado { color: var(--mut); }
 
 @keyframes surge { from { opacity: 0; } }
+
+/* Diagnóstico do codificador */
+.codec-info { margin: 0; font-family: var(--mono); font-size: .74rem; color: var(--dim); line-height: 1.5; }
+.codec-info.ok { color: var(--em2); }
+.codec-info.aviso { color: var(--aviso); }
+#btn-repasse.desligado { color: var(--mut); }

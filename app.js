@@ -2,6 +2,8 @@
 
 // ---------- Configuração ----------
 const MAX_ESPECTADORES = 10;
+const MAX_DIRETOS = 3; // conexões que o host codifica; os demais recebem repassado por outro espectador
+const MAX_FILHOS = 3; // quantos espectadores cada repassador atende
 const PREFIXO_ID = 'ctela-'; // evita colisão de IDs no servidor público do PeerJS
 const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem 0/O/1/I
 const RESOLUCOES = { 480: [854, 480], 720: [1280, 720], 1080: [1920, 1080] };
@@ -24,7 +26,7 @@ function iceServers() {
 
 // ---------- Qualidade ----------
 // Escolha do usuário (resolução/fps/áudio), guardada entre visitas.
-const escolha = { res: 720, fps: 30, audio: true, auto: true };
+const escolha = { res: 720, fps: 30, audio: true, auto: true, repasse: true };
 try { Object.assign(escolha, JSON.parse(localStorage.getItem('escolha') || '{}')); } catch {}
 
 // Bitrate-base ≈ pixels × fps × 0,075 bits/pixel (720p30 ≈ 2 Mbps).
@@ -157,9 +159,24 @@ function iniciarSeletores() {
 let host = null; // { peer, stream, viewers: Map<peerId, {conn, call, num}>, codigo, contador, timer }
 let conteudo = 'motion'; // 'motion' (fluidez) | 'detail' (nitidez)
 
-function restricoesVideo() {
+// Alvo da captura. Com muitos espectadores ou rede ruim, reduz aqui (uma vez) e não em cada envio (N vezes).
+function alvoCaptura() {
   const [w, h] = RESOLUCOES[escolha.res];
-  return { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: escolha.fps, max: escolha.fps } };
+  const p = host ? perfil(diretos()) : { escala: 1, fps: escolha.fps };
+  return { largura: Math.round(w / p.escala), altura: Math.round(h / p.escala), fps: p.fps };
+}
+function restricoesVideo() {
+  const t = alvoCaptura();
+  return { width: { ideal: t.largura }, height: { ideal: t.altura }, frameRate: { ideal: t.fps, max: t.fps } };
+}
+async function aplicarCaptura(forcar) {
+  if (!host) return;
+  const t = alvoCaptura();
+  const chave = `${t.largura}x${t.altura}@${t.fps}`;
+  if (!forcar && chave === host.capChave) return;
+  host.capChave = chave;
+  try { await host.stream.getVideoTracks()[0].applyConstraints(restricoesVideo()); } catch {}
+  atualizarTagResolucao();
 }
 
 // Abre o seletor do navegador. Devolve null se o usuário cancelar.
@@ -198,7 +215,7 @@ async function iniciarHost() {
 
   // O stream enviado aos espectadores é estável: só as faixas dentro dele são trocadas.
   const stream = new MediaStream([vt]);
-  host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null, ctx: null, audioReal: false, audioLigado: true, nivel: 0, ruim: 0, bom: 0, monitor: null, sinal: null };
+  host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null, ctx: null, audioReal: false, audioLigado: true, nivel: 0, ruim: 0, bom: 0, monitor: null, sinal: null, repasse: escolha.repasse !== false, capChave: '' };
   host.monitor = setInterval(monitorarRede, 2000);
   const at = capt.getAudioTracks()[0];
   host.audioReal = !!at;
@@ -267,75 +284,108 @@ function abrirSala(h, tentativa) {
   });
 }
 
+// Quantas conexões o host está de fato codificando (cada uma custa CPU/GPU, que o jogo também usa).
+function diretos(h = host) {
+  let n = 0;
+  if (h) h.viewers.forEach((v) => { if (v.call) n++; });
+  return n;
+}
+const maxDiretos = (h) => (h.repasse === false ? MAX_ESPECTADORES : MAX_DIRETOS);
+
+// Espectador já recebendo a imagem direto do host e com vaga para repassar.
+function escolherRepassador(h) {
+  let melhor = null;
+  h.viewers.forEach((v) => {
+    if (!v.call || !v.pronto || v.filhos.size >= MAX_FILHOS) return;
+    if (!melhor || v.filhos.size < melhor.filhos.size) melhor = v;
+  });
+  return melhor;
+}
+
+function removerEspectador(h, v) {
+  if (v.removido) return;
+  v.removido = true;
+  if (h.viewers.get(v.conn.peer) === v) h.viewers.delete(v.conn.peer);
+  try { v.call && v.call.close(); } catch {}
+  try { v.conn.close(); } catch {}
+  // quem recebia por ele precisa de outra rota: refaz a conexão (e é encaixado de novo)
+  v.filhos.forEach((id) => {
+    const f = h.viewers.get(id);
+    if (f) { f.relay = null; try { f.conn.send({ tipo: 'refazer' }); } catch {} }
+  });
+  if (v.relay) { const r = h.viewers.get(v.relay); if (r) r.filhos.delete(v.conn.peer); }
+  if (host === h) atualizarQualidade();
+}
+
+function ligarDireto(h, v) {
+  const kbps = perfil(diretos(h) + 1).kbps;
+  const call = h.peer.call(v.conn.peer, h.stream, { metadata: { kbps }, sdpTransform: (sdp) => ajustarSdp(sdp, kbps) });
+  v.call = call;
+  call.on('close', () => removerEspectador(h, v));
+  call.on('error', () => removerEspectador(h, v));
+  esperarConexao(call, v);
+}
+
+function ligarPorRepasse(h, v, r) {
+  v.relay = r.conn.peer;
+  r.filhos.add(v.conn.peer);
+  try {
+    r.conn.send({ tipo: 'repassar', para: v.conn.peer, kbps: perfil(1).kbps });
+    v.conn.send({ tipo: 'via-relay' });
+  } catch {}
+}
+
 function aceitarEspectador(h, conn) {
   conn.on('open', () => {
     if (host !== h) return conn.close();
     // mesmo espectador reconectando: derruba a conexão antiga para não ocupar uma vaga à toa
     const cid = conn.metadata && conn.metadata.cid;
-    if (cid) {
-      h.viewers.forEach((antigo, id) => {
-        if (antigo.cid === cid) {
-          h.viewers.delete(id);
-          try { antigo.conn.close(); antigo.call.close(); } catch {}
-        }
-      });
-    }
+    if (cid) [...h.viewers.values()].filter((a) => a.cid === cid).forEach((a) => removerEspectador(h, a));
     if (h.viewers.size >= MAX_ESPECTADORES) {
       conn.send({ tipo: 'cheio' });
       setTimeout(() => conn.close(), 300);
       return;
     }
-    const kbps = perfil(h.viewers.size + 1).kbps;
-    const call = h.peer.call(conn.peer, h.stream, {
-      metadata: { kbps },
-      sdpTransform: (sdp) => ajustarSdp(sdp, kbps),
-    });
-    const v = { conn, call, num: ++h.contador, cid };
+    const v = { conn, call: null, num: ++h.contador, cid, relay: null, filhos: new Set(), pronto: false, removido: false };
     h.viewers.set(conn.peer, v);
-    const remover = () => {
-      if (h.viewers.get(conn.peer) === v) {
-        h.viewers.delete(conn.peer);
-        atualizarQualidade();
-      }
-      try { call.close(); } catch {}
-    };
-    conn.on('close', remover);
-    conn.on('error', remover);
-    call.on('close', remover);
-    call.on('error', remover);
+    conn.on('close', () => removerEspectador(h, v));
+    conn.on('error', () => removerEspectador(h, v));
+
+    // até MAX_DIRETOS o host envia direto; acima disso, outro espectador repassa (poupa o PC de quem joga)
+    const r = diretos(h) >= maxDiretos(h) ? escolherRepassador(h) : null;
+    if (r) ligarPorRepasse(h, v, r); else ligarDireto(h, v);
     atualizarQualidade();
-    esperarConexao(call);
   });
 }
 
 // O peerConnection só existe/conecta depois de um instante: espera e aplica os limites.
-function esperarConexao(call, tentativas = 0) {
+function esperarConexao(call, v, tentativas = 0) {
   const pc = call.peerConnection;
   if (!pc) {
-    if (tentativas < 50) setTimeout(() => esperarConexao(call, tentativas + 1), 200);
+    if (tentativas < 50) setTimeout(() => esperarConexao(call, v, tentativas + 1), 200);
     return;
   }
   pc.addEventListener('connectionstatechange', () => {
-    if (pc.connectionState === 'connected') aplicarEmSender(call);
+    if (pc.connectionState === 'connected') { v.pronto = true; aplicarEmSender(call); }
     if (pc.connectionState === 'failed' || pc.connectionState === 'closed') { try { call.close(); } catch {} }
   });
-  if (pc.connectionState === 'connected') aplicarEmSender(call);
+  if (pc.connectionState === 'connected') { v.pronto = true; aplicarEmSender(call); }
 }
 
 function aplicarEmSender(call) {
   if (!host) return;
-  const p = perfil(host.viewers.size);
+  const p = perfil(diretos());
   const pc = call.peerConnection;
   if (!pc) return;
   const altura = (host.stream.getVideoTracks()[0].getSettings().height) || RESOLUCOES[escolha.res][1];
-  const escalaBase = Math.max(1, altura / RESOLUCOES[escolha.res][1]); // se a captura veio maior que o escolhido
+  const escalaBase = Math.max(1, altura / alvoCaptura().altura); // normalmente 1: a captura já está no tamanho alvo
   pc.getSenders().forEach((s) => {
     if (!s.track || s.track.kind !== 'video') return;
     const params = s.getParameters();
     if (!params.encodings || !params.encodings.length) params.encodings = [{}];
     params.encodings[0].maxBitrate = p.kbps * 1000;
     params.encodings[0].maxFramerate = p.fps;
-    params.encodings[0].scaleResolutionDownBy = escalaBase * p.escala;
+    params.encodings[0].scaleResolutionDownBy = escalaBase;
     params.degradationPreference = conteudo === 'detail' ? 'maintain-resolution' : 'maintain-framerate';
     s.setParameters(params).catch(() => {});
   });
@@ -345,15 +395,41 @@ function aplicarEmSender(call) {
 async function medirEspectador(call) {
   const pc = call.peerConnection;
   if (!pc || pc.connectionState !== 'connected') return null;
-  let perda = 0, rtt = 0, disp = 0;
+  let perda = 0, rtt = 0, disp = 0, enc = null;
   try {
     const st = await pc.getStats();
+    const codecs = {};
+    st.forEach((r) => { if (r.type === 'codec') codecs[r.id] = r.mimeType; });
     st.forEach((r) => {
+      if (r.type === 'outbound-rtp' && r.kind === 'video') {
+        enc = { codec: codecs[r.codecId], impl: r.encoderImplementation, he: r.powerEfficientEncoder, limite: r.qualityLimitationReason, frames: r.framesEncoded, tempo: r.totalEncodeTime };
+      }
       if (r.type === 'remote-inbound-rtp' && r.kind === 'video') { perda = r.fractionLost || 0; rtt = r.roundTripTime || 0; }
       else if (r.type === 'candidate-pair' && (r.nominated || r.state === 'succeeded') && r.availableOutgoingBitrate) disp = Math.max(disp, r.availableOutgoingBitrate);
     });
   } catch { return null; }
-  return { perda, rtt, disp };
+  return { perda, rtt, disp, enc };
+}
+
+// Mostra como o vídeo está sendo codificado: hardware (leve para o jogo) ou software (usa a CPU).
+function mostrarCodificador(h, vs, brutas) {
+  const el = $('host-enc');
+  if (!el) return;
+  const i = brutas.findIndex((m) => m && m.enc);
+  if (i < 0) { el.textContent = vs.length ? 'Codificação: medindo…' : 'Codificação: aguardando o primeiro espectador'; el.className = 'codec-info'; return; }
+  const v = vs[i], e = brutas[i].enc;
+  let ms = null;
+  if (v.encAnt && e.frames > v.encAnt.frames) ms = ((e.tempo - v.encAnt.tempo) / (e.frames - v.encAnt.frames)) * 1000;
+  v.encAnt = { frames: e.frames, tempo: e.tempo };
+  const impl = String(e.impl || '');
+  const hw = e.he === true || /external|hardware|mediafoundation|nvenc|videotoolbox|d3d|vaapi|accelerat/i.test(impl);
+  const sw = !hw && (e.he === false || /libvpx|openh264|software|libaom|ffmpeg/i.test(impl));
+  const codec = (e.codec || '').replace('video/', '') || '?';
+  const modo = hw ? 'hardware' : sw ? 'software' : 'tipo não informado';
+  const envios = diretos(h);
+  el.className = 'codec-info' + (sw ? ' aviso' : hw ? ' ok' : '');
+  el.textContent = `Codificação: ${codec} · ${modo}` + (ms !== null ? ` · ${ms.toFixed(1)} ms/quadro` : '') + ` · ${envios} ${envios === 1 ? 'envio direto' : 'envios diretos'}`
+    + (sw ? ' — usa a CPU e pode custar FPS no jogo; confira a aceleração de hardware do navegador.' : '');
 }
 
 function mostrarRede(estado) {
@@ -369,17 +445,21 @@ async function monitorarRede() {
   const h = host;
   if (!h) return;
   if (escolha.auto === false) { if (h.nivel) { h.nivel = 0; atualizarQualidade(); } mostrarRede(); return; }
-  const medidas = (await Promise.all([...h.viewers.values()].map((v) => medirEspectador(v.call)))).filter(Boolean);
+  const vs = [...h.viewers.values()].filter((v) => v.call);
+  const brutas = await Promise.all(vs.map((v) => medirEspectador(v.call)));
+  const medidas = brutas.filter(Boolean);
+  if (host === h) mostrarCodificador(h, vs, brutas);
   if (host !== h || !medidas.length) { mostrarRede(); return; }
 
   const perda = Math.max(...medidas.map((m) => m.perda));
   const rtt = Math.max(...medidas.map((m) => m.rtt));
   const disps = medidas.map((m) => m.disp).filter(Boolean);
   const disp = disps.length ? Math.min(...disps) : 0;
-  const alvo = perfil(h.viewers.size).kbps * 1000;
+  const alvo = perfil(diretos(h)).kbps * 1000;
+  const cpuLimitada = medidas.some((m) => m.enc && m.enc.limite === 'cpu'); // o codificador não dá conta: alivia
 
-  const ruim = perda > 0.05 || rtt > 0.8 || (disp > 0 && disp < alvo * 0.7);
-  const bom = perda < 0.015 && rtt < 0.4 && (!disp || disp > alvo * 1.3);
+  const ruim = perda > 0.05 || rtt > 0.8 || (disp > 0 && disp < alvo * 0.7) || cpuLimitada;
+  const bom = perda < 0.015 && rtt < 0.4 && (!disp || disp > alvo * 1.3) && !cpuLimitada;
 
   if (ruim) {
     h.bom = 0; h.ruim++;
@@ -395,14 +475,16 @@ async function monitorarRede() {
 
 function atualizarQualidade() {
   if (!host) return;
-  const n = host.viewers.size;
-  const p = perfil(n);
+  const n = host.viewers.size, d = diretos();
+  const p = perfil(d);
   $('host-qtd').textContent = n;
   $('host-qualidade').textContent = p.curto;
   $('host-qualidade').title = p.rotulo;
-  const up = (p.kbps * n) / 1000;
+  const up = (p.kbps * d) / 1000; // só o que o host realmente envia (os demais recebem repassado)
   $('host-upload').textContent = up.toFixed(1).replace('.', ',') + ' Mbps';
-  host.viewers.forEach((v) => aplicarEmSender(v.call));
+  $('host-upload').title = d + (d === 1 ? ' envio direto' : ' envios diretos') + (n > d ? ' · ' + (n - d) + ' por repasse' : '');
+  aplicarCaptura();
+  host.viewers.forEach((v) => v.call && aplicarEmSender(v.call));
   mostrarRede();
   renderLista();
 }
@@ -430,9 +512,7 @@ async function aplicarQualidadeAoVivo() {
   sincronizarAjustesAoVivo();
   if (!host) return;
   host.nivel = 0; host.ruim = 0; host.bom = 0;
-  const vt = host.stream.getVideoTracks()[0];
-  try { await vt.applyConstraints(restricoesVideo()); } catch {}
-  atualizarTagResolucao();
+  await aplicarCaptura(true);
   atualizarQualidade();
 }
 
@@ -476,7 +556,7 @@ async function trocarFonte() {
     // troca na conexão de quem já está assistindo, sem renegociar
     const trocas = [];
     h.viewers.forEach((v) => {
-      const pc = v.call.peerConnection;
+      const pc = v.call && v.call.peerConnection;
       if (!pc) return;
       pc.getSenders().forEach((s) => {
         if (!s.track) return;
@@ -503,13 +583,15 @@ function renderLista() {
   host.viewers.forEach((v) => {
     const li = document.createElement('li');
     const av = document.createElement('span'); av.className = 'avatar'; av.textContent = v.num;
-    const nome = document.createElement('span'); nome.className = 'nome'; nome.textContent = 'Espectador ' + v.num;
+    const nome = document.createElement('span'); nome.className = 'nome';
+    const via = v.relay && host.viewers.get(v.relay);
+    nome.textContent = 'Espectador ' + v.num + (via ? ' · via ' + via.num : v.filhos.size ? ' · repassa para ' + v.filhos.size : '');
     const on = document.createElement('i'); on.className = 'on';
     const x = document.createElement('button'); x.className = 'tirar'; x.title = 'Remover da sala';
     x.innerHTML = '<svg class="ic"><use href="#i-x"/></svg>';
     x.onclick = () => {
       try { v.conn.send({ tipo: 'fim' }); } catch {}
-      setTimeout(() => { try { v.conn.close(); v.call.close(); } catch {} }, 200);
+      setTimeout(() => { if (host) removerEspectador(host, v); }, 200);
     };
     li.append(av, nome, on, x);
     ul.append(li);
@@ -583,7 +665,7 @@ function assistir(codigo) {
   status($('viewer-status'), 'Conectando…');
   overlay('carregando', 'Conectando à sala ' + codigo + '…');
 
-  const v = { codigo, peer: null, conn: null, call: null, ok: false, jaConectou: false, fim: false, aguardando: false, tentativas: 0, bytes: -1, parado: 0, vigia: null };
+  const v = { codigo, peer: null, conn: null, call: null, ok: false, jaConectou: false, fim: false, aguardando: false, tentativas: 0, bytes: -1, parado: 0, vigia: null, stream: null, fila: [], filhos: new Map() };
   viewer = v;
   abrirConexao(v);
   v.vigia = setInterval(() => vigiar(v), 2000);
@@ -602,6 +684,7 @@ function reconectar(v, motivo) {
   if (v.tentativas >= 6) return encerrarViewer(v, 'Não foi possível reconectar. ' + motivo);
   v.tentativas++;
   v.aguardando = true;
+  v.stream = null; v.fila = []; v.filhos.clear();
   status($('viewer-status'), `Reconectando… (${v.tentativas}/6)`, 'erro');
   overlay('carregando', `${motivo} Reconectando… (${v.tentativas}/6)`);
   const velho = v.peer;
@@ -630,6 +713,9 @@ function abrirConexao(v) {
       if (!atual() || !m) return;
       if (m.tipo === 'cheio') encerrarViewer(v, 'A sala está cheia (máx. ' + MAX_ESPECTADORES + ').');
       if (m.tipo === 'fim') encerrarViewer(v, 'A transmissão terminou.');
+      if (m.tipo === 'via-relay' && !v.ok) overlay('carregando', 'Recebendo a imagem por repasse…');
+      if (m.tipo === 'repassar') { v.fila.push(m); repassarFila(v); }
+      if (m.tipo === 'refazer') reconectar(v, 'O repasse caiu.');
     });
     conn.on('close', () => { clearTimeout(prazo); if (atual() && !v.fim) reconectar(v, 'A conexão com a sala caiu.'); });
   });
@@ -642,6 +728,8 @@ function abrirConexao(v) {
     call.on('stream', (stream) => {
       if (!atual()) return;
       v.ok = true; v.jaConectou = true; v.tentativas = 0; v.parado = 0; v.bytes = -1;
+      v.stream = stream;
+      repassarFila(v);
       video.srcObject = stream;
       video.muted = false;
       video.volume = prefs.vol;
@@ -678,6 +766,31 @@ function abrirConexao(v) {
       return reconectar(v, 'A sala não respondeu.'); // o host pode estar voltando
     }
     reconectar(v, 'Erro de conexão.');
+  });
+}
+
+// Repasse: o host pede que este espectador envie a imagem que já recebe a outro espectador.
+// Assim o PC de quem joga codifica poucas vezes, e o resto da sala é atendido pelos espectadores.
+function repassarFila(v) {
+  while (v.fila.length && v.stream && v.peer) {
+    const m = v.fila.shift();
+    const kbps = Math.min(m.kbps || 1500, 3500);
+    const c = v.peer.call(m.para, v.stream, { metadata: { kbps }, sdpTransform: (sdp) => ajustarSdp(sdp, kbps) });
+    v.filhos.set(m.para, c);
+    const largar = () => v.filhos.delete(m.para);
+    c.on('close', largar); c.on('error', largar);
+    limitarEnvio(c, kbps);
+  }
+}
+function limitarEnvio(call, kbps, tentativas = 0) {
+  const pc = call.peerConnection;
+  if (!pc || pc.connectionState !== 'connected') { if (tentativas < 60) setTimeout(() => limitarEnvio(call, kbps, tentativas + 1), 250); return; }
+  pc.getSenders().forEach((snd) => {
+    if (!snd.track || snd.track.kind !== 'video') return;
+    const p = snd.getParameters();
+    if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+    p.encodings[0].maxBitrate = kbps * 1000;
+    snd.setParameters(p).catch(() => {});
   });
 }
 
@@ -719,6 +832,17 @@ function sairViewer() {
 $('btn-compartilhar').onclick = iniciarHost;
 $('btn-parar').onclick = pararHost;
 $('btn-trocar').onclick = trocarFonte;
+function atualizarBotaoRepasse() {
+  const b = $('btn-repasse'), lig = escolha.repasse !== false;
+  b.querySelector('span').textContent = lig ? 'Repasse entre espectadores: ligado' : 'Repasse entre espectadores: desligado';
+  b.classList.toggle('desligado', !lig);
+}
+$('btn-repasse').onclick = () => {
+  escolha.repasse = escolha.repasse === false;
+  if (host) host.repasse = escolha.repasse;
+  salvarEscolha(); atualizarBotaoRepasse();
+};
+atualizarBotaoRepasse();
 function atualizarBotaoAuto() {
   const b = $('btn-auto'), lig = escolha.auto !== false;
   b.querySelector('span').textContent = lig ? 'Ajuste automático: ligado' : 'Ajuste automático: desligado';
