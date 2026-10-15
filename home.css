@@ -246,9 +246,9 @@ html.fx-off .fx, html.fx-off .fx-malha-caixa { display: none !important; }
 .fx-tri::before { left: -48px; border-bottom: 81px solid var(--tri-cor); }
 .fx-tri::after { right: 5px; border-top: 81px solid var(--tri-cor); }
 
-/* App instalado: estrelas atrás do painel (somem ao transmitir/assistir) */
+/* App instalado: a mesma constelação do topo da página, atrás do painel (some ao transmitir/assistir) */
 .fx-app { position: fixed; z-index: 0; display: none; }
-html.app-instalado .fx-app { display: block; }
+html.app-instalado .fx-app { display: block; -webkit-mask-image: radial-gradient(ellipse at 50% 45%, #000 50%, transparent 98%); mask-image: radial-gradient(ellipse at 50% 45%, #000 50%, transparent 98%); }
 html.app-instalado body.foco .fx-app { display: none; }
 
 /* Rodapé mínimo do app instalado */
@@ -263,3 +263,7 @@ html.app-instalado body.foco .v2-hero { min-height: 0; }
 .fx-toggle:hover:not(:disabled) { color: var(--em2); }
 .fx-toggle:disabled { cursor: default; text-decoration: none; }
 .v2-rodape .fx-toggle { font-size: .86rem; }
+
+/* "Voltar ao app": só aparece com a página completa aberta dentro do app instalado */
+#voltar-app { display: none; }
+html.modo-site #voltar-app { display: inline-flex; }

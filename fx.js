@@ -92,13 +92,13 @@
 
   // ---------- 1) Constelação (hero): pontos ligados por linhas, o mouse vira mais um ponto ----------
   function constelacao(canvas) {
-    const host = canvas.parentElement, ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d');
     const fx = { aoMover: null }; let w = 0, h = 0, nos = [];
     const mouse = { x: 0, y: 0, dentro: false };
     const DIST = 175, DIST_M = 210;
 
     function medir() {
-      w = host.clientWidth; h = host.clientHeight; ajustarCanvas(canvas, w, h);
+      w = canvas.clientWidth; h = canvas.clientHeight; ajustarCanvas(canvas, w, h);
       const n = Math.min(72, Math.max(22, Math.round((w * h) / 15000)));
       nos = Array.from({ length: n }, () => ({ x: rnd(0, w), y: rnd(0, h), vx: rnd(-0.28, 0.28), vy: rnd(-0.28, 0.28) }));
     }
@@ -143,7 +143,7 @@
     };
     fx.loop = loop;
     window.addEventListener('resize', () => { if (fx.vis) medir(); }, { passive: true });
-    observar(host, fx); fxs.push(fx);
+    observar(canvas, fx); fxs.push(fx);
   }
 
   // ---------- 2) Grade luminosa (Em ação): casas acendem sob o mouse e apagam ----------
@@ -252,52 +252,13 @@
     observar(caixa, fx); fxs.push(fx);
   }
 
-  // ---------- 5) Estrelas (app instalado): reagem ao movimento do mouse; paradas em repouso ----------
-  function estrelas(canvas) {
-    const ctx = canvas.getContext('2d'), fx = {}; let w = 0, h = 0, st = [], px = null, py = null;
-    const v = { x: 0, y: 0, tx: 0, ty: 0 };
-    function medir() {
-      w = window.innerWidth; h = window.innerHeight; ajustarCanvas(canvas, w, h);
-      const n = Math.min(110, Math.round((w + h) / 16));
-      st = Array.from({ length: n }, () => ({ x: rnd(0, w), y: rnd(0, h), z: rnd(0.2, 1), a: rnd(0.35, 0.95) }));
-      desenhar();
-    }
-    function desenhar() {
-      ctx.clearRect(0, 0, w, h); ctx.lineCap = 'round';
-      let tx = v.x * 1.6, ty = v.y * 1.6; if (Math.abs(tx) < 0.1) tx = 0.5; if (Math.abs(ty) < 0.1) ty = 0.5;
-      for (const s of st) {
-        ctx.lineWidth = 1.2 + 2 * s.z; ctx.strokeStyle = `rgba(209,250,229,${s.a * 0.85})`;
-        ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x + tx, s.y + ty); ctx.stroke();
-      }
-    }
-    const loop = criarLoop(() => {
-      v.tx *= 0.9; v.ty *= 0.9; v.x += (v.tx - v.x) * 0.5; v.y += (v.ty - v.y) * 0.5;
-      for (const s of st) {
-        s.x += v.x * s.z; s.y += v.y * s.z;
-        if (s.x < -20) s.x = w + 20; else if (s.x > w + 20) s.x = -20;
-        if (s.y < -20) s.y = h + 20; else if (s.y > h + 20) s.y = -20;
-      }
-      desenhar();
-      return Math.abs(v.x) > 0.08 || Math.abs(v.y) > 0.08 || Math.abs(v.tx) > 0.08 || Math.abs(v.ty) > 0.08;
-    });
-    fx.aoMover = (e) => {
-      if (!podeAnimar() || !fx.vis) return;
-      if (px !== null) { v.tx -= (e.clientX - px) / 12; v.ty -= (e.clientY - py) / 12; loop.iniciar(); }
-      px = e.clientX; py = e.clientY;
-    };
-    fx.loop = loop;
-    fx.reavaliar = () => { if (!st.length && fx.vis) medir(); if (!(podeAnimar() && fx.vis)) loop.parar(); };
-    window.addEventListener('resize', () => { if (fx.vis) medir(); }, { passive: true });
-    observar(canvas, fx); fxs.push(fx);
-  }
-
   // ---------- inicialização ----------
   const q = (s) => document.querySelector(s);
   if (q('.fx-hero')) constelacao(q('.fx-hero'));
   if (q('.fx-grid')) grade(q('.fx-grid'), q('#acao'));
   if (q('.fx-atracao')) atracao(q('.fx-atracao'), q('.v2-rede-vis'));
   if (q('.fx-malha-caixa')) malha(q('.fx-malha-caixa'));
-  if (q('.fx-app')) estrelas(q('.fx-app'));
+  if (q('.fx-app')) constelacao(q('.fx-app')); // mesmo efeito do topo da página, em tela cheia no app instalado
 
   // um único ouvinte de mouse para todos (barato; cada efeito só reage se estiver ativo)
   let ultimo = 0;
@@ -311,11 +272,8 @@
   window.addEventListener('focus', aplicarEstado);
   document.addEventListener('visibilitychange', aplicarEstado);
   new MutationObserver(aplicarEstado).observe(body, { attributes: true, attributeFilter: ['class'] });
+  new MutationObserver(aplicarEstado).observe(html, { attributes: true, attributeFilter: ['class'] }); // entrou/saiu do modo app
   aplicarEstado();
-
-  // "Voltar ao app" quando a página completa é aberta dentro do app instalado
-  const voltar = document.getElementById('voltar-app');
-  if (voltar && html.classList.contains('modo-site')) voltar.hidden = false;
 
   window.Fx = { estado, fxs, custos: () => fxs.map((f) => f.loop && f.loop.custoMedio) };
 })();

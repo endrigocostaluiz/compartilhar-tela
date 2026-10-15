@@ -180,14 +180,26 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
-    // App instalado (PWA) ou ?app=1: mostra só a versão simplificada para transmitir/assistir
+    // App instalado (PWA) ou ?app=1: mostra só a versão simplificada para transmitir/assistir.
+    // Reavalia quando o modo de exibição muda: ao instalar, o Chrome move a aba aberta para a
+    // janela do app SEM recarregar a página, então só checar no carregamento não bastava.
     (function () {
-      try {
-        var m = function (q) { return window.matchMedia && matchMedia(q).matches; };
+      var raiz = document.documentElement;
+      function m(q) { return window.matchMedia && matchMedia(q).matches; }
+      function aplicar() {
         var instalado = m('(display-mode: standalone)') || m('(display-mode: minimal-ui)') || m('(display-mode: window-controls-overlay)') || navigator.standalone || /[?&]app=1/.test(location.search);
-        if (instalado && /[?&]site=1/.test(location.search)) document.documentElement.classList.add('modo-site'); // página completa dentro do app
-        else if (instalado) document.documentElement.classList.add('app-instalado');
-      } catch (e) {}
+        var site = /[?&]site=1/.test(location.search); // página completa dentro do app
+        var antes = raiz.classList.contains('app-instalado');
+        raiz.classList.toggle('app-instalado', !!instalado && !site);
+        raiz.classList.toggle('modo-site', !!instalado && site);
+        if (!antes && raiz.classList.contains('app-instalado')) { try { window.scrollTo(0, 0); } catch (e) {} }
+      }
+      aplicar();
+      ['(display-mode: standalone)', '(display-mode: minimal-ui)', '(display-mode: window-controls-overlay)'].forEach(function (q) {
+        try { var mq = matchMedia(q); if (mq.addEventListener) mq.addEventListener('change', aplicar); else if (mq.addListener) mq.addListener(aplicar); } catch (e) {}
+      });
+      window.addEventListener('appinstalled', aplicar);
+      window.addEventListener('resize', aplicar);
     })();
   </script>
   <link rel="stylesheet" href="style.css">
@@ -260,7 +272,7 @@
       </nav>
       <div class="menu-acoes">
         <button id="btn-instalar" class="btn peq" hidden><svg class="ic"><use href="#i-download"/></svg>Instalar app</button>
-        <a id="voltar-app" class="btn peq" href="./?app=1" hidden>← Voltar ao app</a>
+        <a id="voltar-app" class="btn peq" href="./?app=1">← Voltar ao app</a>
         <a class="btn peq primario" href="#inicio">Transmitir agora</a>
       </div>
     </div>
