@@ -451,3 +451,14 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
 }
 
 .sair-vista { margin-left: auto; align-self: flex-end; }
+
+/* Ajustes ao vivo na tela de transmissão */
+.host-barra { flex-direction: column; align-items: stretch; gap: 16px; }
+.host-ajustes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.host-ajustes .grupo { min-width: 0; }
+.host-ajustes .seg button { padding: 8px 4px; font-size: .82rem; }
+.host-botoes { display: flex; flex-wrap: wrap; gap: 10px; }
+.host-botoes .btn { flex: 1 1 auto; }
+.host-botoes .btn:disabled { opacity: .55; }
+#btn-audio-host.desligado { color: #fcd34d; border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.1); }
+@media (max-width: 760px) { .host-ajustes { grid-template-columns: 1fr; } }

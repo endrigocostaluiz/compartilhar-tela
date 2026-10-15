@@ -142,31 +142,53 @@ function iniciarSeletores() {
 let host = null; // { peer, stream, viewers: Map<peerId, {conn, call, num}>, codigo, contador, timer }
 let conteudo = 'motion'; // 'motion' (fluidez) | 'detail' (nitidez)
 
-async function iniciarHost() {
+function restricoesVideo() {
   const [w, h] = RESOLUCOES[escolha.res];
-  let stream;
+  return { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: escolha.fps, max: escolha.fps } };
+}
+
+// Abre o seletor do navegador. Devolve null se o usuário cancelar.
+async function capturarTela() {
   try {
-    stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: escolha.fps, max: escolha.fps } },
+    return await navigator.mediaDevices.getDisplayMedia({
+      video: restricoesVideo(),
       audio: escolha.audio ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false } : false,
     });
   } catch (e) {
     if (e.name !== 'NotAllowedError') alert('Não foi possível capturar a tela: ' + e.message);
-    return;
+    return null;
   }
+}
+
+// Faixa de áudio muda: mantém sempre uma faixa de áudio na conexão, assim dá para
+// trocar para uma fonte com som depois, sem renegociar com os espectadores.
+function faixaSilenciosa(h) {
+  if (!h.ctx) h.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  return h.ctx.createMediaStreamDestination().stream.getAudioTracks()[0];
+}
+
+async function iniciarHost() {
+  const [w, h] = RESOLUCOES[escolha.res];
+  const capt = await capturarTela();
+  if (!capt) return;
 
   mostrar('tela-host');
   const st = $('host-status');
   status(st, 'Criando sala…');
   $('host-max').textContent = MAX_ESPECTADORES;
   $('host-qtd').textContent = '0';
+  const vt = capt.getVideoTracks()[0];
+  try { await vt.applyConstraints(restricoesVideo()); } catch {}
+  vt.onended = pararHost; // botão "Parar compartilhamento" do navegador
+
+  // O stream enviado aos espectadores é estável: só as faixas dentro dele são trocadas.
+  const stream = new MediaStream([vt]);
+  host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null, ctx: null, audioReal: false, audioLigado: true };
+  const at = capt.getAudioTracks()[0];
+  host.audioReal = !!at;
+  stream.addTrack(at || faixaSilenciosa(host));
   $('preview').srcObject = stream;
-
-  const vt = stream.getVideoTracks()[0];
-  try { await vt.applyConstraints({ width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: escolha.fps, max: escolha.fps } }); } catch {}
-  vt.addEventListener('ended', pararHost); // botão "Parar compartilhamento" do navegador
-
-  host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null };
+  sincronizarAjustesAoVivo();
   const t0 = Date.now();
   $('host-tempo').textContent = '00:00';
   host.timer = setInterval(() => {
@@ -179,7 +201,7 @@ async function iniciarHost() {
   $('btn-enviar').hidden = !navigator.share;
   aplicarConteudo();
   abrirSala(host, 0);
-  if (escolha.audio && !stream.getAudioTracks().length) {
+  if (escolha.audio && !host.audioReal) {
     status(st, 'Sala criada, mas sem áudio (marque "compartilhar áudio" ao escolher tela inteira ou aba).');
   }
 }
@@ -261,7 +283,7 @@ function aplicarEmSender(call) {
   const p = perfil(host.viewers.size);
   const pc = call.peerConnection;
   if (!pc) return;
-  const altura = host.stream.getVideoTracks()[0].getSettings().height || RESOLUCOES[escolha.res][1];
+  const altura = (host.stream.getVideoTracks()[0].getSettings().height) || RESOLUCOES[escolha.res][1];
   const escalaBase = Math.max(1, altura / RESOLUCOES[escolha.res][1]); // se a captura veio maior que o escolhido
   pc.getSenders().forEach((s) => {
     if (!s.track || s.track.kind !== 'video') return;
@@ -286,6 +308,95 @@ function atualizarQualidade() {
   $('host-upload').textContent = up.toFixed(1).replace('.', ',') + ' Mbps';
   host.viewers.forEach((v) => aplicarEmSender(v.call));
   renderLista();
+}
+
+// ---- Ajustes durante a transmissão ----
+function atualizarTagResolucao() {
+  if (!host) return;
+  const cfg = host.stream.getVideoTracks()[0].getSettings();
+  const [w, h] = RESOLUCOES[escolha.res];
+  $('host-res').textContent = `${cfg.width || w}×${cfg.height || h} · ${Math.round(cfg.frameRate || escolha.fps)} fps`;
+}
+
+function sincronizarAjustesAoVivo() {
+  marcarSeg('live-res', escolha.res);
+  marcarSeg('live-fps', escolha.fps);
+  marcarSeg('seg-res', escolha.res);
+  marcarSeg('seg-fps', escolha.fps);
+  atualizarTagResolucao();
+  atualizarBotaoAudio();
+}
+
+// Muda resolução e fps da captura em andamento e reaplica os limites de envio.
+async function aplicarQualidadeAoVivo() {
+  salvarEscolha();
+  sincronizarAjustesAoVivo();
+  if (!host) return;
+  const vt = host.stream.getVideoTracks()[0];
+  try { await vt.applyConstraints(restricoesVideo()); } catch {}
+  atualizarTagResolucao();
+  atualizarQualidade();
+}
+
+function atualizarBotaoAudio() {
+  const b = $('btn-audio-host');
+  const ligado = host && host.audioReal && host.audioLigado;
+  b.disabled = !host || !host.audioReal;
+  trocarIcone(b, ligado ? 'i-volume' : 'i-mute');
+  b.querySelector('span').textContent = !host || !host.audioReal ? 'Sem áudio' : ligado ? 'Áudio ligado' : 'Áudio desligado';
+  b.classList.toggle('desligado', !!host && host.audioReal && !host.audioLigado);
+}
+
+// Escolhe outra tela, janela ou aba e a coloca no lugar da atual, na mesma conexão.
+async function trocarFonte() {
+  if (!host) return;
+  const h = host;
+  const btn = $('btn-trocar');
+  btn.disabled = true;
+  try {
+    const capt = await capturarTela(); // o navegador abre o seletor outra vez
+    if (!capt || host !== h) { if (capt) capt.getTracks().forEach((t) => t.stop()); return; }
+
+    const novoV = capt.getVideoTracks()[0];
+    try { await novoV.applyConstraints(restricoesVideo()); } catch {}
+    novoV.onended = pararHost;
+    if ('contentHint' in novoV) novoV.contentHint = conteudo;
+
+    const velhoV = h.stream.getVideoTracks()[0];
+    const velhoA = h.stream.getAudioTracks()[0];
+    const audioCapt = capt.getAudioTracks()[0];
+    // com áudio novo, usa ele; sem áudio, volta para a faixa muda
+    const novoA = audioCapt || faixaSilenciosa(h);
+    h.audioReal = !!audioCapt;
+    h.audioLigado = true;
+
+    // troca dentro do stream (prévia local e espectadores que entrarem depois)
+    velhoV.onended = null;
+    h.stream.removeTrack(velhoV); h.stream.addTrack(novoV);
+    h.stream.removeTrack(velhoA); h.stream.addTrack(novoA);
+
+    // troca na conexão de quem já está assistindo, sem renegociar
+    const trocas = [];
+    h.viewers.forEach((v) => {
+      const pc = v.call.peerConnection;
+      if (!pc) return;
+      pc.getSenders().forEach((s) => {
+        if (!s.track) return;
+        if (s.track === velhoV) trocas.push(s.replaceTrack(novoV));
+        else if (s.track === velhoA) trocas.push(s.replaceTrack(novoA));
+      });
+    });
+    await Promise.allSettled(trocas);
+
+    velhoV.stop(); velhoA.stop();
+    $('preview').srcObject = h.stream;
+    sincronizarAjustesAoVivo();
+    atualizarQualidade();
+    status($('host-status'), 'Tela trocada. A transmissão continua.', 'ok');
+    if (escolha.audio && !h.audioReal) status($('host-status'), 'Tela trocada, mas a nova fonte está sem áudio.', 'ok');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function renderLista() {
@@ -323,6 +434,7 @@ function pararHost() {
   h.viewers.forEach((v) => { try { v.conn.send({ tipo: 'fim' }); } catch {} });
   setTimeout(() => { try { h.peer.destroy(); } catch {} }, 300);
   h.stream.getTracks().forEach((t) => t.stop());
+  if (h.ctx) h.ctx.close().catch(() => {});
   $('preview').srcObject = null;
   mostrar('tela-inicio');
 }
@@ -428,6 +540,21 @@ function sairViewer() {
 // ---------- Eventos ----------
 $('btn-compartilhar').onclick = iniciarHost;
 $('btn-parar').onclick = pararHost;
+$('btn-trocar').onclick = trocarFonte;
+$('live-res').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  escolha.res = Number(b.dataset.v); aplicarQualidadeAoVivo();
+};
+$('live-fps').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  escolha.fps = Number(b.dataset.v); aplicarQualidadeAoVivo();
+};
+$('btn-audio-host').onclick = () => {
+  if (!host || !host.audioReal) return;
+  host.audioLigado = !host.audioLigado;
+  host.stream.getAudioTracks().forEach((t) => (t.enabled = host.audioLigado));
+  atualizarBotaoAudio();
+};
 $('seg-conteudo').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
   conteudo = b.dataset.v; marcarSeg('seg-conteudo', conteudo); aplicarConteudo();
