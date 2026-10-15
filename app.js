@@ -240,13 +240,20 @@ function renderizarApps() {
   const st = textoStatusAssistente();
   const conectado = Assistente.estado === 'conectado';
   ['apps-status', 'apps-status-live'].forEach((id) => { const el = $(id); if (el) { el.textContent = st.t; el.className = 'apps-status ' + st.c; } });
-  $('apps-baixar').hidden = conectado || !ehWindows;
-  if (!conectado && ehWindows) {
+  if (conectado || !ehWindows) $('apps-baixar').hidden = true;
+  else {
+    // Já instalado: a página abre o assistente sozinha; só oferece reinstalar se passar de ~12 s sem abrir.
+    // Primeira vez: mostra o instalador (é o único passo manual, uma vez só).
+    const espera = Assistente.procurandoDesde ? Date.now() - Assistente.procurandoDesde : 0;
     const jaUsou = Assistente.jaUsou;
-    $('apps-baixar-txt').innerHTML = jaUsou
-      ? 'Se o assistente não abriu sozinho, clique em <b>Abrir o assistente</b>. Se o navegador perguntar, escolha <b>Abrir</b> (e marque para lembrar). Precisa reinstalar? Baixe o instalador de novo.'
-      : '<b>Primeira vez?</b> Para escolher aplicativos (por exemplo, <b>só o jogo</b>, ou <b>tudo menos o Discord</b>) o navegador precisa de um pequeno <b>assistente de áudio</b>. Você instala uma vez e depois a página o abre sozinha.';
-    $('apps-passos').hidden = jaUsou;
+    const mostrar = !jaUsou || espera > 12000;
+    $('apps-baixar').hidden = !mostrar;
+    if (mostrar) {
+      $('apps-baixar-txt').innerHTML = jaUsou
+        ? 'Não foi possível abrir o assistente de áudio. Instale-o de novo (leva alguns segundos); depois a página volta a abri-lo sozinha.'
+        : '<b>Primeira vez?</b> Para escolher aplicativos (por exemplo, <b>só o jogo</b>, ou <b>tudo menos o Discord</b>) o navegador precisa de um pequeno <b>assistente de áudio</b>. Você instala uma vez e, daí em diante, a página o abre sozinha.';
+      $('apps-passos').hidden = jaUsou;
+    }
   }
   $('apps-painel').hidden = !conectado;
   if (conectado) {
@@ -258,13 +265,13 @@ function renderizarApps() {
   if (host && host.audioOrigem === 'aplicativos') atualizarListaApps($('apps-lista-live'));
 }
 Assistente.aoMudar(renderizarApps);
+setInterval(() => { if (!$('apps-audio').hidden && Assistente.estado !== 'conectado') renderizarApps(); }, 1000);
 
 function mostrarAppsLive() {
   const ativo = !!host && host.audioOrigem === 'aplicativos';
   $('host-audio-apps').hidden = !ativo;
   if (ativo) { marcarSeg('seg-apps-modo-live', escolha.appsModo); renderizarApps(); }
 }
-$('btn-abrir-assist').onclick = () => Assistente.abrirPeloProtocolo();
 $('seg-apps-modo').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
   escolha.appsModo = b.dataset.v; if (escolha.appsModo === 'excluir') escolha.appsSel = escolha.appsSel.slice(0, 1);
@@ -324,6 +331,7 @@ function faixaSilenciosa(h) {
 
 async function iniciarHost() {
   const [w, h] = RESOLUCOES[escolha.res];
+  if (escolha.audioModo === 'aplicativos' && ehWindows && Assistente.estado !== 'conectado') Assistente.abrirPeloProtocolo();
   const capt = await capturarTela();
   if (!capt) return;
 
@@ -1226,7 +1234,8 @@ $('remoto').addEventListener('resize', () => {
   $('badge-res').textContent = `${v.videoWidth}×${v.videoHeight}`;
   $('badge-res').hidden = false;
 });
-window.addEventListener('beforeunload', () => { if (host) host.stream.getTracks().forEach((t) => t.stop()); });
+// (não paramos as capturas no beforeunload: o navegador as encerra sozinho ao fechar a página, e navegar para um
+// endereço externo como compartilhartela-audio:// também dispara esse evento sem sair da página)
 
 iniciarSeletores();
 

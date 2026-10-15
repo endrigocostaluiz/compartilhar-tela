@@ -43,6 +43,7 @@ registerProcessor('pcm-player', PcmPlayer);`;
     estadoHelper: null,
     capturando: false,
     sel: [], modo: 'incluir', // seleção: nomes de executáveis (exe) e modo ('incluir' | 'excluir')
+    procurandoDesde: 0,     // quando começou a procurar/abrir o assistente (para decidir o que mostrar)
     jaUsou: false,          // já conectou alguma vez neste navegador (o assistente está instalado)
     _ws: null, _quer: false, _timer: null, _ctx: null, _node: null, _dest: null, _ultimo: '', _ouvintes: [],
   };
@@ -55,12 +56,12 @@ registerProcessor('pcm-player', PcmPlayer);`;
   A.ligar = function () {
     A._quer = true;
     if (A._ws && (A._ws.readyState === 0 || A._ws.readyState === 1)) return;
-    if (A.estado !== 'conectado') { A.estado = 'procurando'; avisar(); }
+    if (A.estado !== 'conectado') { A.estado = 'procurando'; if (!A.procurandoDesde) A.procurandoDesde = Date.now(); avisar(); }
     let ws;
     try { ws = new WebSocket(URL_WS); } catch { return reagendar(); }
     ws.binaryType = 'arraybuffer';
     A._ws = ws;
-    ws.onopen = () => { A.estado = 'conectado'; A._ultimo = ''; A.jaUsou = true; try { localStorage.setItem('assistenteOk', '1'); } catch {} if (A.capturando) A.aplicarSelecao(true); avisar(); };
+    ws.onopen = () => { A.estado = 'conectado'; A.procurandoDesde = 0; A._relancou = false; A._ultimo = ''; A.jaUsou = true; try { localStorage.setItem('assistenteOk', '1'); } catch {} if (A.capturando) A.aplicarSelecao(true); avisar(); };
     ws.onmessage = (ev) => {
       if (typeof ev.data === 'string') {
         let m; try { m = JSON.parse(ev.data); } catch { return; }
@@ -69,7 +70,17 @@ registerProcessor('pcm-player', PcmPlayer);`;
         A._node.port.postMessage(ev.data, [ev.data]);
       }
     };
-    ws.onclose = () => { if (A._ws === ws) { A._ws = null; A.apps = []; if (A._quer) { A.estado = 'procurando'; reagendar(); } else A.estado = 'parado'; avisar(); } };
+    ws.onclose = () => {
+      if (A._ws !== ws) return;
+      A._ws = null; A.apps = [];
+      if (A._quer) {
+        A.estado = 'procurando'; if (!A.procurandoDesde) A.procurandoDesde = Date.now();
+        // se o assistente caiu no meio de uma transmissão, tenta reabri-lo (o navegador pode exigir um clique; então é só uma tentativa)
+        if (A.capturando && !A._relancou) { A._relancou = true; dispararProtocolo(); }
+        reagendar();
+      } else { A.estado = 'parado'; A.procurandoDesde = 0; }
+      avisar();
+    };
     ws.onerror = () => { try { ws.close(); } catch {} };
   };
   function reagendar() {
@@ -78,12 +89,23 @@ registerProcessor('pcm-player', PcmPlayer);`;
   }
 // Pede ao Windows para abrir o assistente (endereço registrado pelo instalador). Roda sem janela e fecha sozinho
   // quando a página é fechada. Precisa ser chamado a partir de um clique do usuário.
+// Abre o endereço registrado pelo instalador sem navegar a página (um quadro invisível não dispara "beforeunload").
+  function dispararProtocolo() {
+    try {
+      const q = document.createElement('iframe');
+      q.style.display = 'none'; q.setAttribute('aria-hidden', 'true');
+      q.src = 'compartilhartela-audio://iniciar';
+      document.body.appendChild(q);
+      setTimeout(() => q.remove(), 4000);
+    } catch {}
+  }
   A.abrirPeloProtocolo = function () {
-    try { location.href = 'compartilhartela-audio://iniciar'; } catch {}
+    A.procurandoDesde = Date.now(); // reinicia a contagem de espera a cada tentativa
+    dispararProtocolo();
     A.ligar();
   };
   A.desligar = function () {
-    A._quer = false; clearTimeout(A._timer);
+    A._quer = false; A.procurandoDesde = 0; clearTimeout(A._timer);
     if (A._ws) { try { A._ws.close(); } catch {} A._ws = null; }
     A.estado = 'parado'; A.apps = []; avisar();
   };
@@ -97,6 +119,8 @@ registerProcessor('pcm-player', PcmPlayer);`;
     return A.modo === 'excluir' ? pids.slice(0, 1) : pids;
   };
   A.aplicarSelecao = function (forcar) {
+    // Só quem está transmitindo controla a captura: uma página que apenas mostra a lista não toma o controle de outra.
+    if (!A.capturando) return;
     if (!A._ws || A._ws.readyState !== 1) return;
     const msg = { cmd: 'escolher', modo: A.modo, pids: A.pidsSelecionados() };
     const txt = JSON.stringify(msg);

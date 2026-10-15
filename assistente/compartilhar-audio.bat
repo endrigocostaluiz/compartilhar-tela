@@ -445,7 +445,7 @@ public static class Assistente
     // =====================================================================
     class Cliente
     {
-        public TcpClient Tcp; public NetworkStream Ns; public volatile bool Vivo = true;
+        public TcpClient Tcp; public NetworkStream Ns; public volatile bool Vivo = true; public string Origem = "";
         public readonly object Escrita = new object();
 
         public void Enviar(int opcode, byte[] dados, int len)
@@ -468,7 +468,8 @@ public static class Assistente
         public void Texto(object o) { var b = Encoding.UTF8.GetBytes(Json.Serialize(o)); Enviar(1, b, b.Length); }
     }
 
-    static Cliente atual;
+    static readonly List<Cliente> clientes = new List<Cliente>();
+    static Cliente dono; // a página que está controlando a captura (escolheu os aplicativos por último)
     static readonly object trava = new object();
     static Dictionary<uint, Fonte> fontes = new Dictionary<uint, Fonte>();
     static string modoAtual = ""; static List<string> erros = new List<string>();
@@ -516,20 +517,20 @@ public static class Assistente
         }
     }
 
-    static void Misturador(Cliente c)
+    static void Misturador()
     {
-        // Entrega 10 ms de áudio por vez, em tempo real: soma as fontes (apps marcados) e envia à página.
+        // Entrega 10 ms de áudio por vez, em tempo real: soma as fontes (apps marcados) e envia à página que as escolheu.
         var sw = Stopwatch.StartNew();
         long enviados = 0; const int frames = 480; int bytes = frames * Canais * 2;
         byte[] tmp = new byte[bytes], saida = new byte[bytes]; int[] soma = new int[frames * Canais];
-        while (c.Vivo)
+        while (true)
         {
+            Cliente d; List<Fonte> lista;
+            lock (trava) { d = dono; lista = new List<Fonte>(fontes.Values); }
+            if (d == null || !d.Vivo || lista.Count == 0) { sw.Restart(); enviados = 0; Thread.Sleep(15); continue; }
             double devidos = sw.Elapsed.TotalSeconds * Rate - enviados;
             if (devidos < frames) { Thread.Sleep(2); continue; }
             enviados += frames;
-            List<Fonte> lista;
-            lock (trava) lista = new List<Fonte>(fontes.Values);
-            if (lista.Count == 0) continue;
             Array.Clear(soma, 0, soma.Length);
             foreach (var f in lista)
             {
@@ -542,7 +543,7 @@ public static class Assistente
                 int v = soma[i]; if (v > 32767) v = 32767; else if (v < -32768) v = -32768;
                 saida[i * 2] = (byte)(v & 0xFF); saida[i * 2 + 1] = (byte)((v >> 8) & 0xFF);
             }
-            c.Enviar(2, saida, bytes);
+            d.Enviar(2, saida, bytes);
         }
     }
 
@@ -574,10 +575,9 @@ public static class Assistente
         var resp = Encoding.ASCII.GetBytes("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: " + aceita + "\r\n\r\n");
         ns.Write(resp, 0, resp.Length);
 
-        // só um cliente por vez: o novo substitui o antigo
-        Cliente antigo; lock (trava) { antigo = atual; atual = c; jaTeveCliente = true; ultimoEvento = DateTime.UtcNow; }
-        if (antigo != null) { antigo.Vivo = false; try { antigo.Tcp.Close(); } catch { } }
-        PararFontes();
+        // várias páginas podem ficar conectadas ao mesmo tempo (ex.: duas abas); cada uma vê a lista de aplicativos
+        lock (trava) { clientes.Add(c); jaTeveCliente = true; ultimoEvento = DateTime.UtcNow; }
+        c.Origem = origem;
         Log("Página conectada (" + origem + ")");
         c.Texto(new Dictionary<string, object> { { "tipo", "ola" }, { "versao", 1 }, { "rate", Rate }, { "canais", Canais } });
 
@@ -596,7 +596,6 @@ public static class Assistente
             }
         });
         thApps.IsBackground = true; thApps.Start();
-        var thMix = new Thread(() => Misturador(c)); thMix.IsBackground = true; thMix.Start();
 
         // --- leitura de quadros do cliente ---
         try
@@ -614,13 +613,14 @@ public static class Assistente
                 if (mask) for (int i = 0; i < dados.Length; i++) dados[i] ^= mk[i % 4];
                 if (op == 8) break;
                 if (op == 9) { c.Enviar(10, dados, dados.Length); continue; }
-                if (op == 1) Comando(Encoding.UTF8.GetString(dados));
+                if (op == 1) Comando(c, Encoding.UTF8.GetString(dados));
             }
         }
         catch { }
         c.Vivo = false;
-        lock (trava) { if (atual == c) atual = null; ultimoEvento = DateTime.UtcNow; }
-        PararFontes();
+        bool eraDono;
+        lock (trava) { clientes.Remove(c); ultimoEvento = DateTime.UtcNow; eraDono = dono == c; if (eraDono) dono = null; }
+        if (eraDono) PararFontes(); // só encerra a captura se foi quem a controlava
         Log("Página desconectada.");
     }
 
@@ -630,7 +630,7 @@ public static class Assistente
         while (lidos < n) { int k = s.Read(b, lidos, n - lidos); if (k <= 0) throw new IOException(); lidos += k; }
     }
 
-    static void Comando(string texto)
+    static void Comando(Cliente c, string texto)
     {
         try
         {
@@ -642,9 +642,15 @@ public static class Assistente
                 var pids = new List<uint>();
                 var arr = o.ContainsKey("pids") ? o["pids"] as System.Collections.IEnumerable : null;
                 if (arr != null) foreach (var x in arr) pids.Add(Convert.ToUInt32(x));
+                bool mudou; lock (trava) { mudou = dono != c; dono = c; }
+                if (mudou) Log("Captura passou a ser controlada por " + c.Origem);
                 Escolher(o.ContainsKey("modo") ? (string)o["modo"] : "incluir", pids);
             }
-            else if (cmd == "parar") PararFontes();
+            else if (cmd == "parar")
+            {
+                bool eh; lock (trava) { eh = dono == c; if (eh) dono = null; }
+                if (eh) PararFontes();
+            }
         }
         catch (Exception e) { Log("Comando inválido: " + e.Message); }
     }
@@ -662,12 +668,13 @@ public static class Assistente
             while (true)
             {
                 Thread.Sleep(1000);
-                bool sem; lock (trava) sem = atual == null;
+                bool sem; lock (trava) sem = clientes.Count == 0;
                 double parado = (DateTime.UtcNow - ultimoEvento).TotalSeconds;
                 if (sem && parado > (jaTeveCliente ? 15 : 90)) { Log("Nenhuma página conectada. Encerrando."); Environment.Exit(0); }
             }
         });
         vigia.IsBackground = true; vigia.Start();
+        var mix = new Thread(Misturador); mix.IsBackground = true; mix.Start();
 
         while (true)
         {
