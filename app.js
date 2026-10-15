@@ -24,7 +24,7 @@ function iceServers() {
 
 // ---------- Qualidade ----------
 // Escolha do usuário (resolução/fps/áudio), guardada entre visitas.
-const escolha = { res: 720, fps: 30, audio: true };
+const escolha = { res: 720, fps: 30, audio: true, auto: true };
 try { Object.assign(escolha, JSON.parse(localStorage.getItem('escolha') || '{}')); } catch {}
 
 // Bitrate-base ≈ pixels × fps × 0,075 bits/pixel (720p30 ≈ 2 Mbps).
@@ -33,16 +33,30 @@ function kbpsBase(res, fps) {
   return Math.round((w * h * fps * 0.075) / 1000);
 }
 
-// Reduz conforme o nº de espectadores (o upload de quem compartilha é o gargalo).
+// Níveis de degradação automática (0 = qualidade escolhida). Cada nível reduz bitrate, fps e resolução.
+const NIVEIS = [
+  { f: 1,   fpsMax: 60, esc: 1 },
+  { f: 0.7, fpsMax: 60, esc: 1 },
+  { f: 0.5, fpsMax: 30, esc: 1.25 },
+  { f: 0.35, fpsMax: 24, esc: 1.5 },
+  { f: 0.2, fpsMax: 15, esc: 2 },
+];
+
+// Reduz conforme o nº de espectadores (o upload de quem compartilha é o gargalo)
+// e conforme o nível de degradação causado pela rede.
 function perfil(n) {
+  const nivel = host && escolha.auto !== false ? host.nivel || 0 : 0;
+  const N = NIVEIS[nivel];
   const base = kbpsBase(escolha.res, escolha.fps);
   let fator = 1, escala = 1;
   if (n >= 7) { fator = 0.5; escala = escolha.res >= 720 ? 1.5 : 1; }
   else if (n >= 4) fator = 0.7;
-  const kbps = Math.max(300, Math.round(base * fator));
+  const kbps = Math.max(150, Math.round(base * fator * N.f));
+  const fps = Math.min(escolha.fps, N.fpsMax);
+  escala *= N.esc;
   const alt = Math.round(RESOLUCOES[escolha.res][1] / escala);
   const mbps = kbps >= 1000 ? (kbps / 1000).toFixed(1).replace('.', ',') + ' Mbps' : kbps + ' kbps';
-  return { kbps, fps: escolha.fps, escala, rotulo: `${alt}p · ${escolha.fps} fps · ${mbps}`, curto: `${alt}p·${escolha.fps}` };
+  return { kbps, fps, escala, nivel, rotulo: `${alt}p · ${fps} fps · ${mbps}`, curto: `${alt}p·${fps}` };
 }
 
 // Ajusta o SDP do vídeo: prefere H.264 (codificação por hardware na maioria dos PCs)
@@ -66,8 +80,9 @@ function ajustarSdp(sdp, kbps) {
   if (h264.length) fmts = [...h264.filter((p) => fmts.includes(p)), ...fmts.filter((p) => !h264.includes(p))];
   bloco[0] = [...pts.slice(0, 3), ...fmts].join(' ');
 
-  // bitrate inicial = alvo; mínimo = 55% do alvo (não nos codecs de retransmissão "apt=")
-  const extra = `x-google-start-bitrate=${kbps};x-google-min-bitrate=${Math.round(kbps * 0.55)}`;
+  // início em 60% do alvo e mínimo baixo: com internet ruim o navegador precisa poder descer
+  // bastante, senão ele insiste em enviar mais do que a rede aguenta e a imagem trava.
+  const extra = `x-google-start-bitrate=${Math.round(kbps * 0.6)};x-google-min-bitrate=${Math.min(150, Math.round(kbps * 0.15))}`;
   const comFmtp = new Set();
   for (let i = 0; i < bloco.length; i++) {
     const m = bloco[i].match(/^a=fmtp:(\d+) (.*)$/);
@@ -183,7 +198,8 @@ async function iniciarHost() {
 
   // O stream enviado aos espectadores é estável: só as faixas dentro dele são trocadas.
   const stream = new MediaStream([vt]);
-  host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null, ctx: null, audioReal: false, audioLigado: true };
+  host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null, ctx: null, audioReal: false, audioLigado: true, nivel: 0, ruim: 0, bom: 0, monitor: null, sinal: null };
+  host.monitor = setInterval(monitorarRede, 2000);
   const at = capt.getAudioTracks()[0];
   host.audioReal = !!at;
   stream.addTrack(at || faixaSilenciosa(host));
@@ -221,7 +237,23 @@ function abrirSala(h, tentativa) {
   });
 
   peer.on('connection', (conn) => aceitarEspectador(h, conn));
-  peer.on('disconnected', () => { if (host === h && !peer.destroyed) peer.reconnect(); });
+  // Se a conexão com o servidor de sinalização cair, tenta voltar até conseguir.
+  // A imagem dos espectadores já conectados continua (é direta entre navegadores).
+  const religar = () => {
+    if (host !== h || peer.destroyed || h.sinal) return;
+    status($('host-status'), 'Reconectando ao servidor da sala…', 'erro');
+    h.sinal = setInterval(() => {
+      if (host !== h || peer.destroyed) { clearInterval(h.sinal); h.sinal = null; return; }
+      if (!peer.disconnected) {
+        clearInterval(h.sinal); h.sinal = null;
+        status($('host-status'), 'Sala aberta. Envie o código ou o link.', 'ok');
+        return;
+      }
+      try { peer.reconnect(); } catch {}
+    }, 3000);
+    try { peer.reconnect(); } catch {}
+  };
+  peer.on('disconnected', religar);
 
   peer.on('error', (err) => {
     if (host !== h) return;
@@ -230,6 +262,7 @@ function abrirSala(h, tentativa) {
       return abrirSala(h, tentativa + 1);
     }
     if (err.type === 'peer-unavailable') return; // espectador sumiu antes da chamada
+    if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) return religar();
     status($('host-status'), 'Erro de conexão com o servidor de sinalização (' + err.type + ').', 'erro');
   });
 }
@@ -237,6 +270,16 @@ function abrirSala(h, tentativa) {
 function aceitarEspectador(h, conn) {
   conn.on('open', () => {
     if (host !== h) return conn.close();
+    // mesmo espectador reconectando: derruba a conexão antiga para não ocupar uma vaga à toa
+    const cid = conn.metadata && conn.metadata.cid;
+    if (cid) {
+      h.viewers.forEach((antigo, id) => {
+        if (antigo.cid === cid) {
+          h.viewers.delete(id);
+          try { antigo.conn.close(); antigo.call.close(); } catch {}
+        }
+      });
+    }
     if (h.viewers.size >= MAX_ESPECTADORES) {
       conn.send({ tipo: 'cheio' });
       setTimeout(() => conn.close(), 300);
@@ -247,7 +290,7 @@ function aceitarEspectador(h, conn) {
       metadata: { kbps },
       sdpTransform: (sdp) => ajustarSdp(sdp, kbps),
     });
-    const v = { conn, call, num: ++h.contador };
+    const v = { conn, call, num: ++h.contador, cid };
     h.viewers.set(conn.peer, v);
     const remover = () => {
       if (h.viewers.get(conn.peer) === v) {
@@ -274,6 +317,7 @@ function esperarConexao(call, tentativas = 0) {
   }
   pc.addEventListener('connectionstatechange', () => {
     if (pc.connectionState === 'connected') aplicarEmSender(call);
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') { try { call.close(); } catch {} }
   });
   if (pc.connectionState === 'connected') aplicarEmSender(call);
 }
@@ -297,6 +341,58 @@ function aplicarEmSender(call) {
   });
 }
 
+// ---- Adaptação automática à rede de quem transmite ----
+async function medirEspectador(call) {
+  const pc = call.peerConnection;
+  if (!pc || pc.connectionState !== 'connected') return null;
+  let perda = 0, rtt = 0, disp = 0;
+  try {
+    const st = await pc.getStats();
+    st.forEach((r) => {
+      if (r.type === 'remote-inbound-rtp' && r.kind === 'video') { perda = r.fractionLost || 0; rtt = r.roundTripTime || 0; }
+      else if (r.type === 'candidate-pair' && (r.nominated || r.state === 'succeeded') && r.availableOutgoingBitrate) disp = Math.max(disp, r.availableOutgoingBitrate);
+    });
+  } catch { return null; }
+  return { perda, rtt, disp };
+}
+
+function mostrarRede(estado) {
+  const el = $('host-rede');
+  if (!el) return;
+  const n = host ? host.nivel : 0;
+  el.className = 'tag tag-rede' + (n > 0 ? ' ruim' : '');
+  el.textContent = escolha.auto === false ? 'Ajuste automático desligado'
+    : n === 0 ? 'Rede estável' : `Rede instável · qualidade reduzida (${n}/${NIVEIS.length - 1})`;
+}
+
+async function monitorarRede() {
+  const h = host;
+  if (!h) return;
+  if (escolha.auto === false) { if (h.nivel) { h.nivel = 0; atualizarQualidade(); } mostrarRede(); return; }
+  const medidas = (await Promise.all([...h.viewers.values()].map((v) => medirEspectador(v.call)))).filter(Boolean);
+  if (host !== h || !medidas.length) { mostrarRede(); return; }
+
+  const perda = Math.max(...medidas.map((m) => m.perda));
+  const rtt = Math.max(...medidas.map((m) => m.rtt));
+  const disps = medidas.map((m) => m.disp).filter(Boolean);
+  const disp = disps.length ? Math.min(...disps) : 0;
+  const alvo = perfil(h.viewers.size).kbps * 1000;
+
+  const ruim = perda > 0.05 || rtt > 0.8 || (disp > 0 && disp < alvo * 0.7);
+  const bom = perda < 0.015 && rtt < 0.4 && (!disp || disp > alvo * 1.3);
+
+  if (ruim) {
+    h.bom = 0; h.ruim++;
+    if (h.ruim >= 2 && h.nivel < NIVEIS.length - 1) { h.nivel++; h.ruim = 0; atualizarQualidade(); }
+  } else if (bom) {
+    h.ruim = 0; h.bom++;
+    if (h.bom >= 8 && h.nivel > 0) { h.nivel--; h.bom = 0; atualizarQualidade(); } // sobe um nível após ~16 s estável
+  } else {
+    h.ruim = Math.max(0, h.ruim - 1); h.bom = 0;
+  }
+  mostrarRede();
+}
+
 function atualizarQualidade() {
   if (!host) return;
   const n = host.viewers.size;
@@ -307,6 +403,7 @@ function atualizarQualidade() {
   const up = (p.kbps * n) / 1000;
   $('host-upload').textContent = up.toFixed(1).replace('.', ',') + ' Mbps';
   host.viewers.forEach((v) => aplicarEmSender(v.call));
+  mostrarRede();
   renderLista();
 }
 
@@ -332,6 +429,7 @@ async function aplicarQualidadeAoVivo() {
   salvarEscolha();
   sincronizarAjustesAoVivo();
   if (!host) return;
+  host.nivel = 0; host.ruim = 0; host.bom = 0;
   const vt = host.stream.getVideoTracks()[0];
   try { await vt.applyConstraints(restricoesVideo()); } catch {}
   atualizarTagResolucao();
@@ -430,6 +528,8 @@ function pararHost() {
   const h = host;
   host = null;
   clearInterval(h.timer);
+  clearInterval(h.monitor);
+  clearInterval(h.sinal);
   $('host-lista').textContent = '';
   h.viewers.forEach((v) => { try { v.conn.send({ tipo: 'fim' }); } catch {} });
   setTimeout(() => { try { h.peer.destroy(); } catch {} }, 300);
@@ -452,47 +552,88 @@ function overlay(modo, msg) {
   if (msg) $('overlay-msg').textContent = msg;
 }
 
+// Identificador estável deste navegador: permite ao host reconhecer uma reconexão.
+function cidCliente() {
+  try {
+    let c = sessionStorage.getItem('cid');
+    if (!c) { c = novoCodigo() + novoCodigo(); sessionStorage.setItem('cid', c); }
+    return c;
+  } catch { return novoCodigo() + novoCodigo(); }
+}
+
 function assistir(codigo) {
   codigo = limparCodigo(codigo);
   if (codigo.length !== 6) return alert('Informe o código de 6 caracteres.');
   mostrar('tela-viewer');
   definirModo('cinema'); // modo padrão de quem assiste
-  const st = $('viewer-status');
   const video = $('remoto');
   video.srcObject = null;
   video.muted = true;
   atualizarSom();
   $('viewer-codigo').textContent = codigo;
   $('badge-res').hidden = true;
-  status(st, 'Conectando…');
+  status($('viewer-status'), 'Conectando…');
   overlay('carregando', 'Conectando à sala ' + codigo + '…');
 
-  const v = { peer: criarPeer(), conn: null, call: null, ok: false };
+  const v = { codigo, peer: null, conn: null, call: null, ok: false, jaConectou: false, fim: false, aguardando: false, tentativas: 0, bytes: -1, parado: 0, vigia: null };
   viewer = v;
-  const falhar = (msg) => {
-    if (viewer !== v) return;
-    status(st, 'Desconectado', 'erro');
-    overlay('erro', msg);
-  };
+  abrirConexao(v);
+  v.vigia = setInterval(() => vigiar(v), 2000);
+}
 
-  v.peer.on('open', () => {
-    const conn = v.peer.connect(PREFIXO_ID + codigo, { reliable: true });
+function encerrarViewer(v, msg) {
+  if (viewer !== v) return;
+  v.fim = true;
+  status($('viewer-status'), 'Desconectado', 'erro');
+  overlay('erro', msg);
+}
+
+// Perdeu a conexão (internet instável, queda do servidor...): tenta voltar sozinho, sem F5.
+function reconectar(v, motivo) {
+  if (viewer !== v || v.fim || v.aguardando) return;
+  if (v.tentativas >= 6) return encerrarViewer(v, 'Não foi possível reconectar. ' + motivo);
+  v.tentativas++;
+  v.aguardando = true;
+  status($('viewer-status'), `Reconectando… (${v.tentativas}/6)`, 'erro');
+  overlay('carregando', `${motivo} Reconectando… (${v.tentativas}/6)`);
+  const velho = v.peer;
+  v.peer = null; v.call = null; v.conn = null; v.ok = false; v.bytes = -1; v.parado = 0;
+  try { velho && velho.destroy(); } catch {}
+  setTimeout(() => {
+    v.aguardando = false;
+    if (viewer === v && !v.fim) abrirConexao(v);
+  }, Math.min(1000 * v.tentativas, 5000));
+}
+
+function abrirConexao(v) {
+  const st = $('viewer-status');
+  const video = $('remoto');
+  const peer = criarPeer();
+  v.peer = peer;
+  const atual = () => viewer === v && v.peer === peer; // ignora eventos de conexões antigas
+
+  peer.on('open', () => {
+    if (!atual()) return;
+    const conn = peer.connect(PREFIXO_ID + v.codigo, { reliable: true, metadata: { cid: cidCliente() } });
     v.conn = conn;
-    const prazo = setTimeout(() => { if (!v.ok) falhar('Sala não encontrada ou sem resposta.'); }, 15000);
-    conn.on('open', () => overlay('carregando', 'Aguardando a imagem…'));
+    const prazo = setTimeout(() => { if (atual() && !v.ok) reconectar(v, 'A sala não respondeu.'); }, 15000);
+    conn.on('open', () => { if (atual() && !v.ok) overlay('carregando', 'Aguardando a imagem…'); });
     conn.on('data', (m) => {
-      if (m && m.tipo === 'cheio') { v.ok = true; falhar('A sala está cheia (máx. ' + MAX_ESPECTADORES + ').'); }
-      if (m && m.tipo === 'fim') { falhar('A transmissão terminou.'); }
+      if (!atual() || !m) return;
+      if (m.tipo === 'cheio') encerrarViewer(v, 'A sala está cheia (máx. ' + MAX_ESPECTADORES + ').');
+      if (m.tipo === 'fim') encerrarViewer(v, 'A transmissão terminou.');
     });
-    conn.on('close', () => { clearTimeout(prazo); if (v.ok) falhar('A transmissão terminou.'); });
+    conn.on('close', () => { clearTimeout(prazo); if (atual() && !v.fim) reconectar(v, 'A conexão com a sala caiu.'); });
   });
 
-  v.peer.on('call', (call) => {
+  peer.on('call', (call) => {
+    if (!atual()) return;
     v.call = call;
     const kbps = (call.metadata && call.metadata.kbps) || 1500;
     call.answer(undefined, { sdpTransform: (sdp) => ajustarSdp(sdp, kbps) }); // não envia nada de volta
     call.on('stream', (stream) => {
-      v.ok = true;
+      if (!atual()) return;
+      v.ok = true; v.jaConectou = true; v.tentativas = 0; v.parado = 0; v.bytes = -1;
       video.srcObject = stream;
       video.muted = false;
       video.volume = prefs.vol;
@@ -508,14 +649,41 @@ function assistir(codigo) {
       acordar();
       overlay('some');
       reduzirAtraso(call);
+      const pc = call.peerConnection;
+      if (pc) pc.addEventListener('iceconnectionstatechange', () => {
+        if (!atual()) return;
+        const e = pc.iceConnectionState;
+        if (e === 'failed') reconectar(v, 'A conexão falhou.');
+        else if (e === 'disconnected') status(st, 'Conexão instável…', 'erro');
+        else if (e === 'connected' || e === 'completed') status(st, 'Ao vivo', 'ok');
+      });
     });
-    call.on('close', () => falhar('A transmissão terminou.'));
+    call.on('close', () => { if (atual() && !v.fim) reconectar(v, 'A transmissão foi interrompida.'); });
   });
 
-  v.peer.on('error', (err) => {
-    if (err.type === 'peer-unavailable') falhar('Sala não encontrada. Confira o código.');
-    else falhar('Erro de conexão (' + err.type + ').');
+  // se a sinalização cair com a imagem já chegando, a conexão direta continua: não derruba
+  peer.on('disconnected', () => { if (atual() && !v.ok) reconectar(v, 'Conexão com o servidor perdida.'); });
+  peer.on('error', (err) => {
+    if (!atual()) return;
+    if (err.type === 'peer-unavailable') {
+      if (!v.jaConectou) return encerrarViewer(v, 'Sala não encontrada. Confira o código.');
+      return reconectar(v, 'A sala não respondeu.'); // o host pode estar voltando
+    }
+    reconectar(v, 'Erro de conexão.');
   });
+}
+
+// Vigia: se pararem de chegar dados por ~10 s com a conexão aparentemente viva, reconecta.
+async function vigiar(v) {
+  if (viewer !== v || v.fim || v.aguardando || !v.ok || !v.call || !v.call.peerConnection) return;
+  try {
+    const st = await v.call.peerConnection.getStats();
+    let total = 0;
+    st.forEach((r) => { if (r.type === 'inbound-rtp') total += r.bytesReceived || 0; });
+    if (total === v.bytes) v.parado++; else v.parado = 0;
+    v.bytes = total;
+    if (v.parado >= 5) { v.parado = 0; reconectar(v, 'A imagem parou de chegar.'); }
+  } catch {}
 }
 
 function reduzirAtraso(call) {
@@ -530,7 +698,9 @@ function reduzirAtraso(call) {
 
 function sairViewer() {
   if (!viewer) return;
-  try { viewer.peer.destroy(); } catch {}
+  viewer.fim = true;
+  clearInterval(viewer.vigia);
+  try { viewer.peer && viewer.peer.destroy(); } catch {}
   viewer = null;
   $('remoto').srcObject = null;
   history.replaceState(null, '', location.pathname);
@@ -541,6 +711,17 @@ function sairViewer() {
 $('btn-compartilhar').onclick = iniciarHost;
 $('btn-parar').onclick = pararHost;
 $('btn-trocar').onclick = trocarFonte;
+function atualizarBotaoAuto() {
+  const b = $('btn-auto'), lig = escolha.auto !== false;
+  b.querySelector('span').textContent = lig ? 'Ajuste automático: ligado' : 'Ajuste automático: desligado';
+  b.classList.toggle('desligado', !lig);
+}
+$('btn-auto').onclick = () => {
+  escolha.auto = escolha.auto === false;
+  if (escolha.auto === false && host) { host.nivel = 0; host.ruim = 0; host.bom = 0; atualizarQualidade(); }
+  salvarEscolha(); atualizarBotaoAuto(); mostrarRede();
+};
+atualizarBotaoAuto();
 $('live-res').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
   escolha.res = Number(b.dataset.v); aplicarQualidadeAoVivo();

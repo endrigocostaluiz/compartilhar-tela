@@ -462,3 +462,8 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
 .host-botoes .btn:disabled { opacity: .55; }
 #btn-audio-host.desligado { color: #fcd34d; border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.1); }
 @media (max-width: 760px) { .host-ajustes { grid-template-columns: 1fr; } }
+
+/* Estado da rede de quem transmite */
+.tag-rede { bottom: 12px; right: 12px; color: var(--em2); }
+.tag-rede.ruim { color: #fcd34d; background: rgba(251,191,36,.16); border-color: rgba(251,191,36,.5); }
+#btn-auto.desligado { color: var(--mut); }
