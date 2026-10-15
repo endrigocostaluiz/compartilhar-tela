@@ -1,6 +1,6 @@
 // Service worker: só guarda o "casco" do app para instalação/abertura rápida.
 // Nunca intercepta WebSocket/WebRTC (não passam pelo fetch do SW).
-const CACHE = 'compartilhar-tela-v23';
+const CACHE = 'compartilhar-tela-v25';
 const ARQUIVOS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ARQUIVOS = [
   './home.css',
   './home.js',
   './fx.js',
+  './assistente.js',
   './app.js',
   './vendor/peerjs.min.js',
   './manifest.webmanifest',

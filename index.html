@@ -311,15 +311,39 @@
                   <button type="button" data-v="60">60</button>
                 </div>
               </div>
-              <label class="interruptor v2-audio">
+              <div class="grupo v2-audio-grupo">
                 <span class="rot"><svg class="ic"><use href="#i-volume"/></svg>Áudio</span>
-                <input type="checkbox" id="chk-audio" checked>
-                <i></i>
-              </label>
+                <div class="seg" id="seg-audio" role="group" aria-label="Fonte de áudio">
+                  <button type="button" data-v="captura" class="on" title="Todo o som do sistema (ou da aba), junto com o compartilhamento">Todo o áudio</button>
+                  <button type="button" data-v="aplicativos" title="Escolha quais aplicativos entram no som (opcional, só Windows, usa um assistente que você baixa)">Escolher aplicativos</button>
+                  <button type="button" data-v="nenhum">Sem áudio</button>
+                </div>
+              </div>
               <button id="btn-compartilhar" class="btn grande primario brilho">
                 <svg class="ic"><use href="#i-share"/></svg>
                 Iniciar transmissão
               </button>
+            </div>
+            <div class="apps-audio" id="apps-audio" hidden>
+              <div class="apps-status" id="apps-status"></div>
+              <div class="apps-baixar" id="apps-baixar" hidden>
+                <p>Para escolher aplicativos (por exemplo, <b>só o jogo</b>, ou <b>tudo menos o Discord</b>), o navegador precisa de um pequeno <b>assistente de áudio</b>. Ele é <b>opcional</b>, funciona só no <b>Windows 10 (versão 2004) ou 11</b> e é um arquivo de texto que você pode abrir e conferir.</p>
+                <a class="btn primario" href="assistente/compartilhar-audio.bat" download><svg class="ic"><use href="#i-download"/></svg>Baixar assistente de áudio</a>
+                <ol>
+                  <li>Abra o arquivo baixado. Se o Windows avisar, clique em <b>Mais informações → Executar assim mesmo</b>.</li>
+                  <li>Deixe a janelinha aberta enquanto transmite.</li>
+                  <li>Esta página reconhece o assistente sozinha. Se o navegador perguntar sobre acessar a rede local, permita.</li>
+                </ol>
+                <p class="dica">O assistente só conversa com este computador e só aceita esta página. Nada do seu áudio passa por servidores.</p>
+              </div>
+              <div class="apps-painel" id="apps-painel" hidden>
+                <div class="seg" id="seg-apps-modo" role="group" aria-label="Como usar os aplicativos">
+                  <button type="button" data-v="incluir" class="on">Só os marcados</button>
+                  <button type="button" data-v="excluir">Tudo, menos o marcado</button>
+                </div>
+                <ul class="apps-lista" id="apps-lista"></ul>
+                <p class="dica" id="apps-dica"></p>
+              </div>
             </div>
             <p class="dica" id="dica-qualidade"></p>
             <div class="v2-entrar">
@@ -373,6 +397,17 @@
                         <button type="button" data-v="motion" class="on"><svg class="ic"><use href="#i-film"/></svg>Vídeo / jogo</button>
                         <button type="button" data-v="detail"><svg class="ic"><use href="#i-type"/></svg>Texto / slides</button>
                       </div>
+                    </div>
+                  </div>
+                  <div class="host-audio-apps" id="host-audio-apps" hidden>
+                    <div class="grupo">
+                      <span class="rot"><svg class="ic"><use href="#i-volume"/></svg>Aplicativos no áudio (ao vivo)</span>
+                      <div class="seg" id="seg-apps-modo-live" role="group" aria-label="Como usar os aplicativos">
+                        <button type="button" data-v="incluir" class="on">Só os marcados</button>
+                        <button type="button" data-v="excluir">Tudo, menos o marcado</button>
+                      </div>
+                      <div class="apps-status" id="apps-status-live"></div>
+                      <ul class="apps-lista" id="apps-lista-live"></ul>
                     </div>
                   </div>
                   <div class="host-botoes">
@@ -682,6 +717,7 @@
   <button id="ao-topo" class="ao-topo so-home" aria-label="Voltar ao topo" title="Voltar ao topo"><svg class="ic"><use href="#i-up"/></svg></button>
 
   <script src="vendor/peerjs.min.js"></script>
+  <script src="assistente.js"></script>
   <script src="app.js"></script>
   <script src="home.js"></script>
   <script src="fx.js"></script>

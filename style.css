@@ -479,3 +479,31 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
 .codec-info.ok { color: var(--em2); }
 .codec-info.aviso { color: var(--aviso); }
 #btn-repasse.desligado { color: var(--mut); }
+
+/* Aplicativos no áudio (assistente opcional) */
+.apps-audio { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-lg); background: rgba(0,0,0,.22); border: 1px solid var(--borda); }
+.apps-audio[hidden], .apps-baixar[hidden], .apps-painel[hidden], .host-audio-apps[hidden] { display: none; }
+.apps-status { font-size: .84rem; color: var(--mut); }
+.apps-status.ok { color: var(--em2); }
+.apps-status.erro { color: var(--err); }
+.apps-status:empty { display: none; }
+.apps-baixar { display: flex; flex-direction: column; gap: 12px; font-size: .86rem; color: var(--mut); }
+.apps-baixar p { margin: 0; }
+.apps-baixar b { color: var(--txt); font-weight: 600; }
+.apps-baixar .btn { align-self: flex-start; }
+.apps-baixar ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.apps-painel { display: flex; flex-direction: column; gap: 10px; }
+.apps-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.22) transparent; }
+.apps-lista li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: var(--r-md); background: rgba(255,255,255,.04); border: 1px solid var(--borda); }
+.apps-lista li.tocando { border-color: rgba(16,185,129,.4); }
+.apps-lista li.fechado { opacity: .55; }
+.apps-lista label { display: flex; align-items: center; gap: 10px; min-width: 0; cursor: pointer; flex: 1; }
+.apps-lista input[type=checkbox] { width: 18px; height: 18px; padding: 0; accent-color: var(--em); flex: none; }
+.apps-lista .nome { font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vu-app { flex: none; width: 64px; height: 6px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
+.vu-app i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--em), var(--em2)); transition: width .15s linear; }
+.host-audio-apps { padding-top: 2px; }
+
+.v2-audio-grupo .seg button { flex: 1 0 auto; padding: 8px 12px; }
+.apps-lista input[type=checkbox] { color-scheme: dark; }
+.host-audio-apps .apps-lista { max-height: 168px; }

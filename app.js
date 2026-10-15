@@ -26,8 +26,12 @@ function iceServers() {
 
 // ---------- Qualidade ----------
 // Escolha do usuário (resolução/fps/áudio), guardada entre visitas.
-const escolha = { res: 720, fps: 30, audio: true, auto: true, repasse: true };
+const escolha = { res: 720, fps: 30, audio: true, auto: true, repasse: true, audioModo: 'captura', appsSel: [], appsModo: 'incluir' };
 try { Object.assign(escolha, JSON.parse(localStorage.getItem('escolha') || '{}')); } catch {}
+// O áudio sempre começa em "todo o áudio" (o padrão); escolher aplicativos é opcional e só vale na sessão.
+escolha.audioModo = 'captura';
+if (!Array.isArray(escolha.appsSel)) escolha.appsSel = [];
+if (escolha.appsModo !== 'excluir') escolha.appsModo = 'incluir';
 
 // Bitrate-base ≈ pixels × fps × 0,075 bits/pixel (720p30 ≈ 2 Mbps).
 function kbpsBase(res, fps) {
@@ -142,7 +146,7 @@ function iniciarSeletores() {
   if (![15, 24, 30, 60].includes(escolha.fps)) escolha.fps = 30;
   marcarSeg('seg-res', escolha.res);
   marcarSeg('seg-fps', escolha.fps);
-  $('chk-audio').checked = !!escolha.audio;
+  marcarSeg('seg-audio', escolha.audioModo);
   atualizarDica();
   $('seg-res').onclick = (e) => {
     const b = e.target.closest('button'); if (!b) return;
@@ -152,8 +156,111 @@ function iniciarSeletores() {
     const b = e.target.closest('button'); if (!b) return;
     escolha.fps = Number(b.dataset.v); marcarSeg('seg-fps', escolha.fps); salvarEscolha();
   };
-  $('chk-audio').onchange = (e) => { escolha.audio = e.target.checked; salvarEscolha(); };
+  $('seg-audio').onclick = (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    escolha.audioModo = b.dataset.v; escolha.audio = escolha.audioModo !== 'nenhum';
+    marcarSeg('seg-audio', escolha.audioModo);
+    mostrarAppsAudio();
+  };
 }
+
+// ---------- Aplicativos no áudio (assistente opcional, só Windows) ----------
+
+function sincronizarSelecaoApps() {
+  Assistente.definirSelecao(escolha.appsSel, escolha.appsModo);
+  marcarSeg('seg-apps-modo', escolha.appsModo);
+  marcarSeg('seg-apps-modo-live', escolha.appsModo);
+  renderizarApps();
+}
+
+// Liga/desliga a conexão com o assistente só quando o usuário escolhe "Escolher aplicativos".
+function mostrarAppsAudio() {
+  const usa = escolha.audioModo === 'aplicativos';
+  $('apps-audio').hidden = !usa;
+  if (usa) { Assistente.definirSelecao(escolha.appsSel, escolha.appsModo); Assistente.ligar(); }
+  else if (!host) Assistente.desligar();
+  marcarSeg('seg-apps-modo', escolha.appsModo);
+  renderizarApps();
+}
+
+const ehWindows = /Windows/i.test(navigator.userAgent);
+function textoStatusAssistente() {
+  if (!ehWindows) return { t: 'O assistente de áudio funciona só no Windows. Neste sistema, use "Todo o áudio".', c: 'erro' };
+  if (Assistente.estado === 'conectado') {
+    const e = Assistente.estadoHelper;
+    return e && e.erros && e.erros.length ? { t: 'Assistente conectado, mas o Windows recusou: ' + e.erros[0], c: 'erro' } : { t: 'Assistente de áudio conectado ✓', c: 'ok' };
+  }
+  if (Assistente.estado === 'procurando') return { t: 'Procurando o assistente de áudio neste computador…', c: '' };
+  return { t: '', c: '' };
+}
+
+function atualizarListaApps(ul) {
+  if (!ul._itens) ul._itens = new Map();
+  const nomes = escolha.appsSel.map((x) => x.toLowerCase());
+  const vistos = new Set();
+  const lista = Assistente.apps.map((a) => ({ chave: a.exe.toLowerCase(), exe: a.exe, nome: a.nome, nivel: a.nivel, tocando: a.tocando, aberto: true }));
+  // escolhidos que não estão abertos agora continuam aparecendo (para não "perder" a escolha)
+  escolha.appsSel.forEach((x) => { if (!lista.some((a) => a.chave === x.toLowerCase())) lista.push({ chave: x.toLowerCase(), exe: x, nome: x, nivel: 0, tocando: false, aberto: false }); });
+  lista.forEach((a) => {
+    vistos.add(a.chave);
+    let it = ul._itens.get(a.chave);
+    if (!it) {
+      const li = document.createElement('li');
+      const lab = document.createElement('label');
+      const cx = document.createElement('input'); cx.type = 'checkbox';
+      const nome = document.createElement('span'); nome.className = 'nome';
+      const vu = document.createElement('span'); vu.className = 'vu-app'; vu.innerHTML = '<i></i>';
+      lab.append(cx, nome); li.append(lab, vu);
+      cx.onchange = () => {
+        const k = a.chave;
+        if (escolha.appsModo === 'excluir') escolha.appsSel = cx.checked ? [a.exe] : [];
+        else escolha.appsSel = cx.checked ? [...new Set([...escolha.appsSel, a.exe])] : escolha.appsSel.filter((x) => x.toLowerCase() !== k);
+        salvarEscolha(); sincronizarSelecaoApps();
+      };
+      ul.append(li);
+      it = { li, cx, nome, barra: vu.firstChild };
+      ul._itens.set(a.chave, it);
+    }
+    it.cx.checked = nomes.includes(a.chave);
+    const repetido = lista.filter((x) => x.nome === a.nome).length > 1; // vários apps com o mesmo nome: mostra o executável
+    it.nome.textContent = a.nome + (repetido ? ' · ' + a.exe : '') + (a.aberto ? '' : ' (fechado)');
+    it.li.classList.toggle('tocando', a.tocando);
+    it.li.classList.toggle('fechado', !a.aberto);
+    it.barra.style.width = Math.min(100, Math.round(a.nivel * 140)) + '%';
+  });
+  [...ul._itens.keys()].forEach((k) => { if (!vistos.has(k)) { ul._itens.get(k).li.remove(); ul._itens.delete(k); } });
+  // mantém a ordem estável (só mexe no DOM se a ordem mudou, para não atrapalhar cliques)
+  const esperados = lista.map((a) => ul._itens.get(a.chave).li);
+  if (esperados.some((li, i) => ul.children[i] !== li)) esperados.forEach((li) => ul.append(li));
+}
+
+function renderizarApps() {
+  const st = textoStatusAssistente();
+  const conectado = Assistente.estado === 'conectado';
+  ['apps-status', 'apps-status-live'].forEach((id) => { const el = $(id); if (el) { el.textContent = st.t; el.className = 'apps-status ' + st.c; } });
+  $('apps-baixar').hidden = conectado || !ehWindows;
+  $('apps-painel').hidden = !conectado;
+  if (conectado) {
+    atualizarListaApps($('apps-lista'));
+    $('apps-dica').textContent = escolha.appsSel.length ? ''
+      : escolha.appsModo === 'excluir' ? 'Marque o aplicativo que fica de fora do som (ex.: Discord). Todo o resto entra.'
+      : 'Marque ao menos um aplicativo (ex.: seu jogo). Sem isso a transmissão segue sem áudio.';
+  }
+  if (host && host.audioOrigem === 'aplicativos') atualizarListaApps($('apps-lista-live'));
+}
+Assistente.aoMudar(renderizarApps);
+
+function mostrarAppsLive() {
+  const ativo = !!host && host.audioOrigem === 'aplicativos';
+  $('host-audio-apps').hidden = !ativo;
+  if (ativo) { marcarSeg('seg-apps-modo-live', escolha.appsModo); renderizarApps(); }
+}
+$('seg-apps-modo').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  escolha.appsModo = b.dataset.v; if (escolha.appsModo === 'excluir') escolha.appsSel = escolha.appsSel.slice(0, 1);
+  salvarEscolha(); sincronizarSelecaoApps();
+};
+$('seg-apps-modo-live').onclick = $('seg-apps-modo').onclick;
 
 // ---------- Quem compartilha ----------
 let host = null; // { peer, stream, viewers: Map<peerId, {conn, call, num}>, codigo, contador, timer }
@@ -184,7 +291,7 @@ async function capturarTela() {
   try {
     return await navigator.mediaDevices.getDisplayMedia({
       video: restricoesVideo(),
-      audio: escolha.audio ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false } : false,
+      audio: escolha.audioModo === 'captura' ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false } : false,
     });
   } catch (e) {
     if (e.name !== 'NotAllowedError') alert('Não foi possível capturar a tela: ' + e.message);
@@ -204,6 +311,14 @@ async function iniciarHost() {
   const capt = await capturarTela();
   if (!capt) return;
 
+  // áudio: todo o áudio (da captura), aplicativos escolhidos (assistente) ou nenhum
+  let faixaA = null, avisoAudio = '';
+  if (escolha.audioModo === 'captura') faixaA = capt.getAudioTracks()[0] || null;
+  else if (escolha.audioModo === 'aplicativos') {
+    try { faixaA = await Assistente.iniciarCaptura(); }
+    catch { avisoAudio = 'Assistente de áudio não encontrado: transmitindo sem áudio. Abra o assistente e use "Escolher aplicativos" de novo.'; }
+  }
+
   mostrar('tela-host');
   const st = $('host-status');
   status(st, 'Criando sala…');
@@ -217,9 +332,11 @@ async function iniciarHost() {
   const stream = new MediaStream([vt]);
   host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null, ctx: null, audioReal: false, audioLigado: true, nivel: 0, ruim: 0, bom: 0, monitor: null, sinal: null, repasse: escolha.repasse !== false, capChave: '' };
   host.monitor = setInterval(monitorarRede, 2000);
-  const at = capt.getAudioTracks()[0];
-  host.audioReal = !!at;
-  stream.addTrack(at || faixaSilenciosa(host));
+  host.audioReal = !!faixaA;
+  host.audioOrigem = faixaA ? escolha.audioModo : 'nenhum';
+  host.avisoAudio = avisoAudio;
+  stream.addTrack(faixaA || faixaSilenciosa(host));
+  mostrarAppsLive();
   $('preview').srcObject = stream;
   sincronizarAjustesAoVivo();
   const t0 = Date.now();
@@ -234,8 +351,8 @@ async function iniciarHost() {
   $('btn-enviar').hidden = !navigator.share;
   aplicarConteudo();
   abrirSala(host, 0);
-  if (escolha.audio && !host.audioReal) {
-    status(st, 'Sala criada, mas sem áudio (marque "compartilhar áudio" ao escolher tela inteira ou aba).');
+  if (escolha.audioModo === 'captura' && !host.audioReal) {
+    host.avisoAudio = 'Sem áudio: marque "compartilhar áudio" ao escolher a tela inteira ou uma aba.';
   }
 }
 
@@ -249,7 +366,7 @@ function abrirSala(h, tentativa) {
     h.codigo = codigo;
     $('host-codigo').textContent = codigo;
     $('host-link').value = `${location.origin}${location.pathname}?sala=${codigo}`;
-    status($('host-status'), 'Sala aberta. Envie o código ou o link.', 'ok');
+    status($('host-status'), 'Sala aberta. Envie o código ou o link.' + (h.avisoAudio ? ' ⚠ ' + h.avisoAudio : ''), 'ok');
     atualizarQualidade();
   });
 
@@ -542,16 +659,20 @@ async function trocarFonte() {
 
     const velhoV = h.stream.getVideoTracks()[0];
     const velhoA = h.stream.getAudioTracks()[0];
-    const audioCapt = capt.getAudioTracks()[0];
-    // com áudio novo, usa ele; sem áudio, volta para a faixa muda
-    const novoA = audioCapt || faixaSilenciosa(h);
-    h.audioReal = !!audioCapt;
-    h.audioLigado = true;
+    // Áudio de aplicativos (ou "nenhum") não depende da captura de tela: continua o mesmo.
+    // Todo o áudio (captura): usa o da nova fonte, ou a faixa muda se ela não tiver som.
+    let novoA = velhoA;
+    if (h.audioOrigem === 'captura') {
+      const audioCapt = capt.getAudioTracks()[0];
+      novoA = audioCapt || faixaSilenciosa(h);
+      h.audioReal = !!audioCapt;
+      h.audioLigado = true;
+    }
 
     // troca dentro do stream (prévia local e espectadores que entrarem depois)
     velhoV.onended = null;
     h.stream.removeTrack(velhoV); h.stream.addTrack(novoV);
-    h.stream.removeTrack(velhoA); h.stream.addTrack(novoA);
+    if (novoA !== velhoA) { h.stream.removeTrack(velhoA); h.stream.addTrack(novoA); }
 
     // troca na conexão de quem já está assistindo, sem renegociar
     const trocas = [];
@@ -561,17 +682,17 @@ async function trocarFonte() {
       pc.getSenders().forEach((s) => {
         if (!s.track) return;
         if (s.track === velhoV) trocas.push(s.replaceTrack(novoV));
-        else if (s.track === velhoA) trocas.push(s.replaceTrack(novoA));
+        else if (novoA !== velhoA && s.track === velhoA) trocas.push(s.replaceTrack(novoA));
       });
     });
     await Promise.allSettled(trocas);
 
-    velhoV.stop(); velhoA.stop();
+    velhoV.stop(); if (novoA !== velhoA) velhoA.stop();
     $('preview').srcObject = h.stream;
     sincronizarAjustesAoVivo();
     atualizarQualidade();
     status($('host-status'), 'Tela trocada. A transmissão continua.', 'ok');
-    if (escolha.audio && !h.audioReal) status($('host-status'), 'Tela trocada, mas a nova fonte está sem áudio.', 'ok');
+    if (h.audioOrigem === 'captura' && !h.audioReal) status($('host-status'), 'Tela trocada, mas a nova fonte está sem áudio.', 'ok');
   } finally {
     btn.disabled = false;
   }
@@ -612,6 +733,8 @@ function pararHost() {
   clearInterval(h.timer);
   clearInterval(h.monitor);
   clearInterval(h.sinal);
+  Assistente.pararCaptura();
+  $('host-audio-apps').hidden = true;
   $('host-lista').textContent = '';
   h.viewers.forEach((v) => { try { v.conn.send({ tipo: 'fim' }); } catch {} });
   setTimeout(() => { try { h.peer.destroy(); } catch {} }, 300);
@@ -619,6 +742,7 @@ function pararHost() {
   if (h.ctx) h.ctx.close().catch(() => {});
   $('preview').srcObject = null;
   mostrar('tela-inicio');
+  if (escolha.audioModo !== 'aplicativos') Assistente.desligar();
 }
 
 // Prévia local só enquanto a janela está visível: com o jogo na frente ela não gasta decodificação/GPU à toa.
