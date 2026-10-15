@@ -217,3 +217,49 @@ html.app-instalado body.foco.transmitindo .v2-cmd-wrap { max-width: 1180px; }
 html.app-instalado body.foco.assistindo .v2-cmd-wrap { max-width: 1100px; }
 html.app-instalado .v2-cmd-linha { gap: 16px; }
 html.app-instalado .v2-cmd-linha #btn-compartilhar { flex-basis: 100%; margin-left: 0; }
+
+/* ===== Efeitos de fundo interativos (ver fx.js) ===== */
+.fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+html.fx-off .fx, html.fx-off .fx-malha-caixa { display: none !important; }
+.v2-hero-txt, .v2-cmd-wrap, .v2-rolar { position: relative; z-index: 1; }
+.v2-rolar { position: absolute; }
+.fx-hero { opacity: .9; -webkit-mask-image: radial-gradient(ellipse at 50% 45%, #000 50%, transparent 98%); mask-image: radial-gradient(ellipse at 50% 45%, #000 50%, transparent 98%); }
+
+/* Em ação: grade que acende sob o mouse, em largura total */
+#acao { position: relative; }
+.fx-grid { inset: 0 auto; left: 50%; width: 100vw; margin-left: -50vw; -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent); }
+#acao .v2-cab, #acao .v2-duo { position: relative; z-index: 1; }
+
+/* Conexão: partículas atraídas ao redor do diagrama */
+.v2-rede-vis { position: relative; }
+.fx-atracao { inset: -28px; width: calc(100% + 56px); height: calc(100% + 56px); z-index: 0; }
+.v2-rede-vis svg { position: relative; z-index: 1; }
+
+/* Chamada final: malha de triângulos com brilho que segue o mouse */
+.fx-malha-caixa { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; z-index: 0; --tri-cor: #0a0f19; }
+.v2-fim > :not(.fx-malha-caixa) { position: relative; z-index: 1; }
+.fx-brilho { position: absolute; left: 0; top: 0; width: 620px; height: 620px; margin: -310px 0 0 -310px; background: radial-gradient(circle closest-side, rgba(52,211,153,.7), rgba(16,185,129,.28) 45%, transparent); will-change: transform; }
+.fx-malha { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--col, 14), 98px); }
+.fx-tri { position: relative; width: 98px; height: 83px; }
+.fx-tri.desl { transform: translateX(-49px); }
+.fx-tri::before, .fx-tri::after { content: ""; position: absolute; width: 0; height: 0; top: 2px; border-right: 46px solid transparent; border-left: 46px solid transparent; }
+.fx-tri::before { left: -48px; border-bottom: 81px solid var(--tri-cor); }
+.fx-tri::after { right: 5px; border-top: 81px solid var(--tri-cor); }
+
+/* App instalado: estrelas atrás do painel (somem ao transmitir/assistir) */
+.fx-app { position: fixed; z-index: 0; display: none; }
+html.app-instalado .fx-app { display: block; }
+html.app-instalado body.foco .fx-app { display: none; }
+
+/* Rodapé mínimo do app instalado */
+.app-rodape { display: none; position: relative; z-index: 1; }
+html.app-instalado .app-rodape { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 16px 14px; font-size: .74rem; color: var(--dim); }
+html.app-instalado body.foco .app-rodape { display: none; }
+html.app-instalado .v2-hero { min-height: calc(100vh - 104px); }
+html.app-instalado body.foco .v2-hero { min-height: 0; }
+.app-rodape a { color: var(--mut); text-decoration: underline; text-underline-offset: 3px; }
+.app-rodape a:hover { color: var(--em2); }
+.fx-toggle { font: inherit; font-size: inherit; color: var(--dim); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.fx-toggle:hover:not(:disabled) { color: var(--em2); }
+.fx-toggle:disabled { cursor: default; text-decoration: none; }
+.v2-rodape .fx-toggle { font-size: .86rem; }

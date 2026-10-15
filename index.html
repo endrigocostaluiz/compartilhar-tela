@@ -184,9 +184,9 @@
     (function () {
       try {
         var m = function (q) { return window.matchMedia && matchMedia(q).matches; };
-        if (m('(display-mode: standalone)') || m('(display-mode: minimal-ui)') || m('(display-mode: window-controls-overlay)') || navigator.standalone || /[?&]app=1/.test(location.search)) {
-          document.documentElement.classList.add('app-instalado');
-        }
+        var instalado = m('(display-mode: standalone)') || m('(display-mode: minimal-ui)') || m('(display-mode: window-controls-overlay)') || navigator.standalone || /[?&]app=1/.test(location.search);
+        if (instalado && /[?&]site=1/.test(location.search)) document.documentElement.classList.add('modo-site'); // página completa dentro do app
+        else if (instalado) document.documentElement.classList.add('app-instalado');
       } catch (e) {}
     })();
   </script>
@@ -194,6 +194,8 @@
   <link rel="stylesheet" href="home.css">
 </head>
 <body class="v2">
+  <canvas class="fx fx-app" aria-hidden="true"></canvas>
+
   <!-- Barra do app instalado (só aparece no modo simplificado) -->
   <header class="app-barra">
     <img src="icons/logo.svg" width="30" height="30" alt="">
@@ -258,6 +260,7 @@
       </nav>
       <div class="menu-acoes">
         <button id="btn-instalar" class="btn peq" hidden><svg class="ic"><use href="#i-download"/></svg>Instalar app</button>
+        <a id="voltar-app" class="btn peq" href="./?app=1" hidden>← Voltar ao app</a>
         <a class="btn peq primario" href="#inicio">Transmitir agora</a>
       </div>
     </div>
@@ -266,6 +269,7 @@
   <main id="topo">
     <!-- INÍCIO -->
     <section class="v2-hero" id="inicio">
+      <canvas class="fx fx-hero so-home" aria-hidden="true"></canvas>
       <div class="v2-hero-txt so-home">
         <span class="v2-tag reveal">Transmissão de tela e áudio · WebRTC</span>
         <h1 class="reveal d1">Sua tela, na tela de quem você quiser. <span class="v2-acento">Em tempo real.</span></h1>
@@ -466,6 +470,7 @@
 
     <!-- EM AÇÃO -->
     <section class="v2-sec so-home" id="acao">
+      <canvas class="fx fx-grid" aria-hidden="true"></canvas>
       <header class="v2-cab reveal">
         <span class="v2-rot">Em ação</span>
         <h2>Dois lados, uma só conexão.</h2>
@@ -517,6 +522,7 @@
         </ul>
       </div>
       <div class="v2-rede-vis reveal d1" aria-hidden="true">
+        <canvas class="fx fx-atracao"></canvas>
         <svg viewBox="0 0 520 440">
           <defs>
             <radialGradient id="halo" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#10b981" stop-opacity=".35"/><stop offset="1" stop-color="#10b981" stop-opacity="0"/></radialGradient>
@@ -639,6 +645,7 @@
 
     <!-- CHAMADA FINAL -->
     <section class="v2-fim so-home reveal">
+      <div class="fx-malha-caixa" aria-hidden="true"></div>
       <h2>Pronto para transmitir?</h2>
       <p>Crie uma sala em segundos. Sem cadastro e sem instalação.</p>
       <a class="btn grande primario brilho" href="#inicio"><svg class="ic"><use href="#i-share"/></svg>Iniciar uma transmissão</a>
@@ -647,7 +654,15 @@
 
   <footer class="v2-rodape so-home">
     <span>© 2026 Compartilhar Tela</span>
+    <button type="button" class="fx-toggle" data-fx-toggle>Efeitos visuais: ligados</button>
     <span class="dev">Desenvolvido por <b>Endrigo Costa</b></span>
+  </footer>
+
+  <!-- Rodapé do app instalado: abrir a página completa -->
+  <footer class="app-rodape">
+    <a href="./?site=1">Abrir a página completa</a>
+    <span aria-hidden="true">·</span>
+    <button type="button" class="fx-toggle" data-fx-toggle>Efeitos visuais: ligados</button>
   </footer>
 
   <button id="ao-topo" class="ao-topo so-home" aria-label="Voltar ao topo" title="Voltar ao topo"><svg class="ic"><use href="#i-up"/></svg></button>
@@ -655,5 +670,6 @@
   <script src="vendor/peerjs.min.js"></script>
   <script src="app.js"></script>
   <script src="home.js"></script>
+  <script src="fx.js"></script>
 </body>
 </html>

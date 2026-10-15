@@ -18,6 +18,6 @@ Site estático: basta servir esta pasta por HTTPS (por exemplo, GitHub Pages). O
 
 ## Estrutura
 
-- `index.html`, `style.css`, `home.css`, `home.js`, `app.js`: página e lógica
+- `index.html`, `style.css`, `home.css`, `home.js`, `fx.js`, `app.js`: página, efeitos visuais e lógica
 - `vendor/peerjs.min.js`: PeerJS 1.5.4 (sinalização via PeerJS Cloud público)
 - `sw.js`, `manifest.webmanifest`, `icons/`: PWA
