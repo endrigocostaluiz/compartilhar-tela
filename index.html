@@ -327,14 +327,17 @@
             <div class="apps-audio" id="apps-audio" hidden>
               <div class="apps-status" id="apps-status"></div>
               <div class="apps-baixar" id="apps-baixar" hidden>
-                <p>Para escolher aplicativos (por exemplo, <b>só o jogo</b>, ou <b>tudo menos o Discord</b>), o navegador precisa de um pequeno <b>assistente de áudio</b>. Ele é <b>opcional</b>, funciona só no <b>Windows 10 (versão 2004) ou 11</b> e é um arquivo de texto que você pode abrir e conferir.</p>
-                <a class="btn primario" href="assistente/compartilhar-audio.bat" download><svg class="ic"><use href="#i-download"/></svg>Baixar assistente de áudio</a>
-                <ol>
-                  <li>Abra o arquivo baixado. Se o Windows avisar, clique em <b>Mais informações → Executar assim mesmo</b>.</li>
-                  <li>Deixe a janelinha aberta enquanto transmite.</li>
-                  <li>Esta página reconhece o assistente sozinha. Se o navegador perguntar sobre acessar a rede local, permita.</li>
+                <p id="apps-baixar-txt"></p>
+                <div class="apps-acoes">
+                  <button type="button" class="btn" id="btn-abrir-assist">Abrir o assistente</button>
+                  <a class="btn primario" href="assistente/compartilhar-audio.bat" download><svg class="ic"><use href="#i-download"/></svg>Baixar o instalador</a>
+                </div>
+                <ol id="apps-passos">
+                  <li>Baixe e abra o instalador (uma única vez). Se o Windows avisar, clique em <b>Mais informações → Executar assim mesmo</b>. A janela fecha sozinha em alguns segundos.</li>
+                  <li>Volte aqui e escolha <b>Escolher aplicativos</b>. A página abre o assistente sozinha, <b>sem janela</b>, e ele fecha quando você fecha a página.</li>
+                  <li>Se o navegador perguntar se pode abrir o <b>Compartilhar Tela</b>, clique em <b>Abrir</b> e marque para lembrar a escolha.</li>
                 </ol>
-                <p class="dica">O assistente só conversa com este computador e só aceita esta página. Nada do seu áudio passa por servidores.</p>
+                <p class="dica">Opcional e só no <b>Windows 10 (2004) ou 11</b>. O assistente só conversa com este computador e só aceita esta página; nada do seu áudio passa por servidores. O instalador é texto puro (dá para conferir) e <a href="assistente/remover-assistente.bat" download>há um removedor</a>.</p>
               </div>
               <div class="apps-painel" id="apps-painel" hidden>
                 <div class="seg" id="seg-apps-modo" role="group" aria-label="Como usar os aplicativos">
@@ -370,6 +373,11 @@
                   <span class="tag tag-tempo mono" id="host-tempo">00:00</span>
                   <span class="tag tag-res mono" id="host-res"></span>
                   <span class="tag tag-rede" id="host-rede">Rede estável</span>
+                </div>
+                <div class="audio-info" id="audio-info">
+                  <span class="rot"><svg class="ic"><use href="#i-volume"/></svg>Áudio enviado</span>
+                  <div class="vu" id="vu"><i></i></div>
+                  <span class="audio-txt" id="audio-txt"></span>
                 </div>
                 <p class="codec-info" id="host-enc">Codificação: aguardando o primeiro espectador</p>
                 <div class="host-barra">
@@ -466,6 +474,7 @@
                   <p id="overlay-msg">Conectando…</p>
                   <button class="btn" id="btn-voltar" hidden>Voltar ao início</button>
                 </div>
+                <button type="button" class="ativar-som" id="btn-ativar-som" hidden><svg class="ic"><use href="#i-volume"/></svg>Clique para ativar o som</button>
                 <span class="tag tag-res mono" id="badge-res" hidden></span>
                 <div class="controles" id="controles">
                   <div class="ctl-grupo">

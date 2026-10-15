@@ -161,6 +161,8 @@ function iniciarSeletores() {
     escolha.audioModo = b.dataset.v; escolha.audio = escolha.audioModo !== 'nenhum';
     marcarSeg('seg-audio', escolha.audioModo);
     mostrarAppsAudio();
+    // o clique conta como gesto do usuário: pede ao Windows para abrir o assistente (sem janela)
+    if (escolha.audioModo === 'aplicativos' && ehWindows && Assistente.estado !== 'conectado') Assistente.abrirPeloProtocolo();
   };
 }
 
@@ -190,7 +192,7 @@ function textoStatusAssistente() {
     const e = Assistente.estadoHelper;
     return e && e.erros && e.erros.length ? { t: 'Assistente conectado, mas o Windows recusou: ' + e.erros[0], c: 'erro' } : { t: 'Assistente de áudio conectado ✓', c: 'ok' };
   }
-  if (Assistente.estado === 'procurando') return { t: 'Procurando o assistente de áudio neste computador…', c: '' };
+  if (Assistente.estado === 'procurando') return { t: Assistente.jaUsou ? 'Abrindo o assistente de áudio…' : 'Procurando o assistente de áudio neste computador…', c: '' };
   return { t: '', c: '' };
 }
 
@@ -239,6 +241,13 @@ function renderizarApps() {
   const conectado = Assistente.estado === 'conectado';
   ['apps-status', 'apps-status-live'].forEach((id) => { const el = $(id); if (el) { el.textContent = st.t; el.className = 'apps-status ' + st.c; } });
   $('apps-baixar').hidden = conectado || !ehWindows;
+  if (!conectado && ehWindows) {
+    const jaUsou = Assistente.jaUsou;
+    $('apps-baixar-txt').innerHTML = jaUsou
+      ? 'Se o assistente não abriu sozinho, clique em <b>Abrir o assistente</b>. Se o navegador perguntar, escolha <b>Abrir</b> (e marque para lembrar). Precisa reinstalar? Baixe o instalador de novo.'
+      : '<b>Primeira vez?</b> Para escolher aplicativos (por exemplo, <b>só o jogo</b>, ou <b>tudo menos o Discord</b>) o navegador precisa de um pequeno <b>assistente de áudio</b>. Você instala uma vez e depois a página o abre sozinha.';
+    $('apps-passos').hidden = jaUsou;
+  }
   $('apps-painel').hidden = !conectado;
   if (conectado) {
     atualizarListaApps($('apps-lista'));
@@ -255,6 +264,7 @@ function mostrarAppsLive() {
   $('host-audio-apps').hidden = !ativo;
   if (ativo) { marcarSeg('seg-apps-modo-live', escolha.appsModo); renderizarApps(); }
 }
+$('btn-abrir-assist').onclick = () => Assistente.abrirPeloProtocolo();
 $('seg-apps-modo').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
   escolha.appsModo = b.dataset.v; if (escolha.appsModo === 'excluir') escolha.appsSel = escolha.appsSel.slice(0, 1);
@@ -301,8 +311,14 @@ async function capturarTela() {
 
 // Faixa de áudio muda: mantém sempre uma faixa de áudio na conexão, assim dá para
 // trocar para uma fonte com som depois, sem renegociar com os espectadores.
-function faixaSilenciosa(h) {
+// Contexto de áudio do host (faixa muda e medidor de nível), criado sob demanda.
+function garantirCtx(h) {
   if (!h.ctx) h.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (h.ctx.state === 'suspended') h.ctx.resume().catch(() => {});
+  return h.ctx;
+}
+function faixaSilenciosa(h) {
+  garantirCtx(h);
   return h.ctx.createMediaStreamDestination().stream.getAudioTracks()[0];
 }
 
@@ -337,6 +353,7 @@ async function iniciarHost() {
   host.avisoAudio = avisoAudio;
   stream.addTrack(faixaA || faixaSilenciosa(host));
   mostrarAppsLive();
+  iniciarVU();
   $('preview').srcObject = stream;
   sincronizarAjustesAoVivo();
   const t0 = Date.now();
@@ -691,11 +708,53 @@ async function trocarFonte() {
     $('preview').srcObject = h.stream;
     sincronizarAjustesAoVivo();
     atualizarQualidade();
+    iniciarVU();
     status($('host-status'), 'Tela trocada. A transmissão continua.', 'ok');
     if (h.audioOrigem === 'captura' && !h.audioReal) status($('host-status'), 'Tela trocada, mas a nova fonte está sem áudio.', 'ok');
   } finally {
     btn.disabled = false;
   }
+}
+
+// ---- Medidor do áudio que está sendo enviado (mostra na hora se há som ou não) ----
+let vuTimer = null, vuNodes = null;
+function textoAudioSemFaixa() {
+  if (escolha.audioModo === 'nenhum') return 'Você escolheu transmitir sem áudio.';
+  if (escolha.audioModo === 'aplicativos') return host && host.avisoAudio ? host.avisoAudio : 'Assistente de áudio indisponível: transmitindo sem áudio.';
+  return 'Nenhum áudio está sendo enviado. Ao compartilhar a tela inteira, marque "Compartilhar áudio do sistema" na janela do navegador (janelas não enviam som). O som do próprio navegador pode ficar de fora da captura do sistema.';
+}
+function iniciarVU() {
+  clearInterval(vuTimer);
+  if (vuNodes) { try { vuNodes.src.disconnect(); } catch {} vuNodes = null; }
+  const barra = $('vu').firstElementChild, txt = $('audio-txt'), box = $('audio-info');
+  barra.style.width = '0%';
+  if (!host) return;
+  const h = host;
+  if (!h.audioReal) { txt.textContent = textoAudioSemFaixa(); box.className = 'audio-info aviso'; return; }
+  const ctx = garantirCtx(h);
+  const src = ctx.createMediaStreamSource(new MediaStream([h.stream.getAudioTracks()[0]]));
+  const an = ctx.createAnalyser(); an.fftSize = 256;
+  src.connect(an); // não conecta ao destino: nada toca nas caixas de som
+  vuNodes = { src, an };
+  h.silencioDesde = Date.now();
+  const buf = new Uint8Array(an.fftSize);
+  vuTimer = setInterval(() => {
+    if (host !== h) return clearInterval(vuTimer);
+    if (document.hidden) return;
+    an.getByteTimeDomainData(buf);
+    let pico = 0;
+    for (let i = 0; i < buf.length; i++) pico = Math.max(pico, Math.abs(buf[i] - 128));
+    const nivel = h.audioLigado ? Math.min(100, Math.round((pico / 128) * 140)) : 0;
+    barra.style.width = nivel + '%';
+    if (!h.audioLigado) { txt.textContent = 'Áudio desligado: os espectadores não ouvem nada.'; box.className = 'audio-info aviso'; return; }
+    if (nivel > 3) { h.silencioDesde = Date.now(); txt.textContent = 'Enviando áudio ✓'; box.className = 'audio-info ok'; }
+    else if (Date.now() - h.silencioDesde > 8000) {
+      txt.textContent = h.audioOrigem === 'aplicativos'
+        ? 'Sem som no momento. Confira se o aplicativo marcado está tocando.'
+        : 'Sem som no momento. Se esperava ouvir algo, confira se o áudio do sistema foi marcado ao compartilhar.';
+      box.className = 'audio-info aviso';
+    }
+  }, 140);
 }
 
 function renderLista() {
@@ -733,6 +792,7 @@ function pararHost() {
   clearInterval(h.timer);
   clearInterval(h.monitor);
   clearInterval(h.sinal);
+  clearInterval(vuTimer); vuNodes = null;
   Assistente.pararCaptura();
   $('host-audio-apps').hidden = true;
   $('host-lista').textContent = '';
@@ -861,6 +921,7 @@ function abrirConexao(v) {
       // tenta com som; se o navegador bloquear o autoplay, entra mudo
       video.play().catch(() => {
         video.muted = true;
+        video.dataset.autoMudo = '1'; // o navegador bloqueou o som automático: mostra o botão de ativar
         atualizarSom();
         status(st, 'Ao vivo · toque no alto-falante para ativar o som', 'ok');
         return video.play();
@@ -935,8 +996,9 @@ function reduzirAtraso(call) {
   const pc = call.peerConnection;
   if (!pc) return;
   pc.getReceivers().forEach((r) => {
-    try { if ('jitterBufferTarget' in r) r.jitterBufferTarget = 50; } catch {}
-    try { if ('playoutDelayHint' in r) r.playoutDelayHint = 0.05; } catch {}
+    const ms = r.track && r.track.kind === 'audio' ? 120 : 50; // áudio com mais folga: evita falhas e cortes
+    try { if ('jitterBufferTarget' in r) r.jitterBufferTarget = ms; } catch {}
+    try { if ('playoutDelayHint' in r) r.playoutDelayHint = ms / 1000; } catch {}
   });
 }
 
@@ -991,6 +1053,7 @@ $('btn-audio-host').onclick = () => {
   host.audioLigado = !host.audioLigado;
   host.stream.getAudioTracks().forEach((t) => (t.enabled = host.audioLigado));
   atualizarBotaoAudio();
+  if (host.audioLigado) host.silencioDesde = Date.now();
 };
 $('seg-conteudo').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
@@ -1028,19 +1091,23 @@ let modoView = 'normal'; // normal | cinema | janela (tela cheia no monitor e Pi
 function atualizarSom() {
   const v = $('remoto');
   const mudo = v.muted || v.volume === 0;
+  $('btn-ativar-som').hidden = !(mudo && v.dataset.autoMudo === '1' && v.srcObject && v.srcObject.getAudioTracks().length > 0);
   trocarIcone($('btn-som'), mudo ? 'i-mute' : 'i-volume');
   $('btn-som').title = mudo ? 'Ativar som (M)' : 'Silenciar (M)';
   $('vol').value = v.muted ? 0 : v.volume;
 }
 function alternarMudo() {
   const v = $('remoto');
+  delete v.dataset.autoMudo;
   if (v.muted || v.volume === 0) { v.muted = false; if (v.volume === 0) v.volume = prefs.vol || 1; }
   else v.muted = true;
   atualizarSom();
 }
 $('btn-som').onclick = alternarMudo;
+$('btn-ativar-som').onclick = (e) => { e.stopPropagation(); alternarMudo(); };
 $('vol').oninput = (e) => {
   const v = $('remoto'), n = Number(e.target.value);
+  delete v.dataset.autoMudo;
   v.volume = n; v.muted = n === 0;
   if (n > 0) { prefs.vol = n; salvarPrefs(); }
   atualizarSom();
@@ -1150,6 +1217,8 @@ function acordar() {
   ociosoTimer = setTimeout(() => { if (viewer && viewer.ok) p.classList.add('ocioso'); }, 2800);
 }
 ['mousemove', 'touchstart', 'click'].forEach((ev) => $('player').addEventListener(ev, acordar, { passive: true }));
+// o primeiro clique no vídeo também ativa o som quando o navegador o bloqueou
+$('player').addEventListener('click', (e) => { const v = $('remoto'); if (v.dataset.autoMudo === '1' && !e.target.closest('.controles')) alternarMudo(); });
 $('player').addEventListener('dblclick', alternarMonitor);
 $('remoto').addEventListener('resize', () => {
   const v = $('remoto');

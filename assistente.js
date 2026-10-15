@@ -43,9 +43,11 @@ registerProcessor('pcm-player', PcmPlayer);`;
     estadoHelper: null,
     capturando: false,
     sel: [], modo: 'incluir', // seleção: nomes de executáveis (exe) e modo ('incluir' | 'excluir')
+    jaUsou: false,          // já conectou alguma vez neste navegador (o assistente está instalado)
     _ws: null, _quer: false, _timer: null, _ctx: null, _node: null, _dest: null, _ultimo: '', _ouvintes: [],
   };
 
+  try { A.jaUsou = localStorage.getItem('assistenteOk') === '1'; } catch {}
   A.aoMudar = (fn) => A._ouvintes.push(fn);
   const avisar = () => A._ouvintes.forEach((f) => { try { f(); } catch {} });
 
@@ -58,7 +60,7 @@ registerProcessor('pcm-player', PcmPlayer);`;
     try { ws = new WebSocket(URL_WS); } catch { return reagendar(); }
     ws.binaryType = 'arraybuffer';
     A._ws = ws;
-    ws.onopen = () => { A.estado = 'conectado'; A._ultimo = ''; if (A.capturando) A.aplicarSelecao(true); avisar(); };
+    ws.onopen = () => { A.estado = 'conectado'; A._ultimo = ''; A.jaUsou = true; try { localStorage.setItem('assistenteOk', '1'); } catch {} if (A.capturando) A.aplicarSelecao(true); avisar(); };
     ws.onmessage = (ev) => {
       if (typeof ev.data === 'string') {
         let m; try { m = JSON.parse(ev.data); } catch { return; }
@@ -74,6 +76,12 @@ registerProcessor('pcm-player', PcmPlayer);`;
     clearTimeout(A._timer);
     if (A._quer) A._timer = setTimeout(A.ligar, 2500);
   }
+// Pede ao Windows para abrir o assistente (endereço registrado pelo instalador). Roda sem janela e fecha sozinho
+  // quando a página é fechada. Precisa ser chamado a partir de um clique do usuário.
+  A.abrirPeloProtocolo = function () {
+    try { location.href = 'compartilhartela-audio://iniciar'; } catch {}
+    A.ligar();
+  };
   A.desligar = function () {
     A._quer = false; clearTimeout(A._timer);
     if (A._ws) { try { A._ws.close(); } catch {} A._ws = null; }
@@ -107,7 +115,7 @@ registerProcessor('pcm-player', PcmPlayer);`;
   A.iniciarCaptura = async function () {
     if (A.estado !== 'conectado') {
       A.ligar();
-      for (let i = 0; i < 20 && A.estado !== 'conectado'; i++) await new Promise((r) => setTimeout(r, 150));
+      for (let i = 0; i < 40 && A.estado !== 'conectado'; i++) await new Promise((r) => setTimeout(r, 200));
       if (A.estado !== 'conectado') throw new Error('assistente de áudio não encontrado');
     }
     const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });

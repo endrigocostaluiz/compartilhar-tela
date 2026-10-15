@@ -507,3 +507,21 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
 .v2-audio-grupo .seg button { flex: 1 0 auto; padding: 8px 12px; }
 .apps-lista input[type=checkbox] { color-scheme: dark; }
 .host-audio-apps .apps-lista { max-height: 168px; }
+
+/* Botão grande: o navegador bloqueou o som automático */
+.ativar-som { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 6; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; border: 0; cursor: pointer; font: inherit; font-weight: 700; color: #03150e; background: linear-gradient(135deg, var(--em2), var(--em)); box-shadow: 0 8px 28px rgba(16,185,129,.55); animation: pulsa 2s ease-in-out infinite; }
+.ativar-som[hidden] { display: none; }
+.ativar-som .ic { width: 1.2em; height: 1.2em; }
+/* Áudio enviado (quem transmite) */
+.audio-info { display: grid; grid-template-columns: auto 140px 1fr; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--r-md); background: var(--card); border: 1px solid var(--borda); font-size: .82rem; color: var(--mut); }
+.audio-info .vu { width: 100%; }
+.audio-info.ok { border-color: rgba(16,185,129,.4); }
+.audio-info.ok .audio-txt { color: var(--em2); }
+.audio-info.aviso { border-color: rgba(251,191,36,.45); }
+.audio-info.aviso .audio-txt { color: var(--aviso); }
+.audio-txt:empty::before { content: 'Aguardando…'; color: var(--dim); }
+@media (max-width: 620px) { .audio-info { grid-template-columns: 1fr; } }
+.vu { flex: none; height: 8px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
+.vu i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--em), var(--em2) 70%, #fbbf24); transition: width .1s linear; }
+.apps-acoes { display: flex; flex-wrap: wrap; gap: 10px; }
+.apps-baixar[hidden], .apps-baixar ol[hidden] { display: none; }

@@ -2,9 +2,6 @@
 chcp 65001 >nul
 title Compartilhar Tela - Assistente de audio
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$t=[IO.File]::ReadAllText('%~f0',[Text.Encoding]::UTF8); $i=$t.IndexOf('#<'+'PS>'); Invoke-Expression $t.Substring($i)"
-echo.
-echo O assistente foi encerrado. Pode fechar esta janela.
-pause >nul
 exit /b
 #<PS>
 # ============================================================================
@@ -13,12 +10,19 @@ exit /b
 #  O que faz: deixa você escolher QUAIS aplicativos entram no áudio da transmissão
 #  (ex.: só o jogo, ou tudo menos o Discord). O navegador sozinho não consegue isso.
 #
-#  Como funciona: usa a captura de áudio por aplicativo do próprio Windows (a mesma
-#  do OBS) e entrega o som à página, por uma conexão LOCAL (127.0.0.1). Nada sai do
-#  seu computador por aqui, e só a página do Compartilhar Tela consegue se conectar.
+#  Este arquivo é um INSTALADOR que roda uma única vez (a janela fecha sozinha):
+#   1. compila, no seu computador, um pequeno programa a partir do código-fonte que está abaixo
+#      (nada é baixado de outro lugar) em  %LOCALAPPDATA%\CompartilharTela\AssistenteAudio.exe;
+#   2. registra o endereço  compartilhartela-audio://  para a página conseguir abrir o assistente
+#      sozinha quando você escolher "Escolher aplicativos" (sem precisar rodar este arquivo de novo);
+#   3. o assistente roda em segundo plano, SEM janela, e fecha sozinho quando você fecha a página.
+#
+#  Como funciona: usa a captura de áudio por aplicativo do próprio Windows (a mesma do OBS) e
+#  entrega o som à página por uma conexão LOCAL (127.0.0.1). Nada sai do seu computador, e só a
+#  página do Compartilhar Tela consegue se conectar.
 #
 #  Este arquivo é texto puro: pode abrir no Bloco de Notas e conferir tudo.
-#  Não instala nada. Para parar, feche esta janela.
+#  Para remover: execute "remover-assistente.bat".
 # ============================================================================
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
@@ -469,7 +473,19 @@ public static class Assistente
     static Dictionary<uint, Fonte> fontes = new Dictionary<uint, Fonte>();
     static string modoAtual = ""; static List<string> erros = new List<string>();
 
-    static void Log(string s) { Console.WriteLine("[" + DateTime.Now.ToString("HH:mm:ss") + "] " + s); }
+    static readonly string ArquivoLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CompartilharTela", "assistente.log");
+    static void Log(string s)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(ArquivoLog));
+            var fi = new FileInfo(ArquivoLog);
+            if (fi.Exists && fi.Length > 200000) fi.Delete();
+            File.AppendAllText(ArquivoLog, "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "] " + s + "\r\n", Encoding.UTF8);
+        }
+        catch { }
+    }
+    static DateTime ultimoEvento = DateTime.UtcNow; static bool jaTeveCliente = false;
 
     static void PararFontes()
     {
@@ -559,7 +575,7 @@ public static class Assistente
         ns.Write(resp, 0, resp.Length);
 
         // só um cliente por vez: o novo substitui o antigo
-        Cliente antigo; lock (trava) { antigo = atual; atual = c; }
+        Cliente antigo; lock (trava) { antigo = atual; atual = c; jaTeveCliente = true; ultimoEvento = DateTime.UtcNow; }
         if (antigo != null) { antigo.Vivo = false; try { antigo.Tcp.Close(); } catch { } }
         PararFontes();
         Log("Página conectada (" + origem + ")");
@@ -603,7 +619,7 @@ public static class Assistente
         }
         catch { }
         c.Vivo = false;
-        lock (trava) { if (atual == c) atual = null; }
+        lock (trava) { if (atual == c) atual = null; ultimoEvento = DateTime.UtcNow; }
         PararFontes();
         Log("Página desconectada.");
     }
@@ -637,34 +653,89 @@ public static class Assistente
     {
         TcpListener l;
         try { l = new TcpListener(IPAddress.Loopback, Porta); l.Start(); }
-        catch (Exception e) { Console.WriteLine("Não foi possível abrir a porta " + Porta + ": " + e.Message + "\nO assistente já está aberto em outra janela?"); return; }
-        Log("Assistente de áudio ativo em 127.0.0.1:" + Porta + ". Deixe esta janela aberta.");
-        Log("Abra o Compartilhar Tela, escolha \"Escolher aplicativos\" no áudio e marque o que quer transmitir.");
+        catch (Exception e) { Log("Não foi possível abrir a porta " + Porta + ": " + e.Message); return; }
+        Log("Assistente de áudio ativo em 127.0.0.1:" + Porta);
+
+        // Roda em segundo plano e encerra sozinho: 15 s depois que a página é fechada (ou 90 s se nenhuma página aparecer).
+        var vigia = new Thread(() =>
+        {
+            while (true)
+            {
+                Thread.Sleep(1000);
+                bool sem; lock (trava) sem = atual == null;
+                double parado = (DateTime.UtcNow - ultimoEvento).TotalSeconds;
+                if (sem && parado > (jaTeveCliente ? 15 : 90)) { Log("Nenhuma página conectada. Encerrando."); Environment.Exit(0); }
+            }
+        });
+        vigia.IsBackground = true; vigia.Start();
+
         while (true)
         {
             var tc = l.AcceptTcpClient();
             var c = new Cliente { Tcp = tc, Ns = tc.GetStream() };
-            var t = new Thread(() => { try { Tratar(c); } catch { } finally { try { tc.Close(); } catch { } } });
-            t.IsBackground = true; t.Start();
+            var th = new Thread(() => { try { Tratar(c); } catch { } finally { try { tc.Close(); } catch { } } });
+            th.IsBackground = true; th.Start();
+        }
+    }
+}
+
+public static class Programa
+{
+    // Uma única instância por usuário: se já estiver rodando, o novo simplesmente sai.
+    public static void Main()
+    {
+        bool novo;
+        using (var m = new Mutex(true, "Local\\CompartilharTelaAssistenteAudio", out novo))
+        {
+            if (!novo) return;
+            Assistente.Iniciar();
         }
     }
 }
 '@
 
-try {
-  Add-Type -TypeDefinition $codigo -Language CSharp -ReferencedAssemblies 'System.Web.Extensions' -IgnoreWarnings
-} catch {
-  Write-Host 'Não foi possível preparar o assistente neste Windows:' -ForegroundColor Red
-  Write-Host $_.Exception.Message
-  return
-}
 $build = [Environment]::OSVersion.Version.Build
+Write-Host ''
+Write-Host '  Compartilhar Tela - Instalando o assistente de áudio' -ForegroundColor Green
+Write-Host '  Roda em segundo plano, sem janela, e fecha sozinho quando você fecha a página.' -ForegroundColor DarkGray
+Write-Host ''
 if ($build -lt 19041) {
   Write-Host "Este Windows (build $build) é antigo demais: a captura por aplicativo exige o Windows 10 versão 2004 (19041) ou mais novo." -ForegroundColor Yellow
+  Start-Sleep -Seconds 10
+  return
+}
+$dir = Join-Path $env:LOCALAPPDATA 'CompartilharTela'
+$exe = Join-Path $dir 'AssistenteAudio.exe'
+try {
+  New-Item -ItemType Directory -Force -Path $dir | Out-Null
+  Get-Process -Name AssistenteAudio -ErrorAction SilentlyContinue | Stop-Process -Force
+  Start-Sleep -Milliseconds 500
+
+  Write-Host '  Preparando o assistente neste computador...'
+  $fonte = Join-Path $dir 'AssistenteAudio.cs'
+  [IO.File]::WriteAllText($fonte, $codigo, (New-Object Text.UTF8Encoding($true)))
+  $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+  if (-not (Test-Path $csc)) { $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe' }
+  $saida = & $csc /nologo /target:winexe /optimize+ /warn:0 "/out:$exe" /r:System.Web.Extensions.dll $fonte 2>&1
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $exe)) { throw ("Falha ao compilar:" + [Environment]::NewLine + ($saida -join [Environment]::NewLine)) }
+  Remove-Item $fonte -Force
+
+  # endereço compartilhartela-audio:// -> abre o assistente (somente para o seu usuário, sem precisar de administrador)
+  $chave = 'HKCU:\Software\Classes\compartilhartela-audio'
+  New-Item -Path "$chave\shell\open\command" -Force | Out-Null
+  Set-ItemProperty -Path $chave -Name '(default)' -Value 'URL:Compartilhar Tela - Assistente de áudio'
+  New-ItemProperty -Path $chave -Name 'URL Protocol' -Value '' -PropertyType String -Force | Out-Null
+  Set-ItemProperty -Path "$chave\shell\open\command" -Name '(default)' -Value ('"{0}" "%1"' -f $exe)
+
+  Start-Process -FilePath $exe
+} catch {
+  Write-Host ''
+  Write-Host '  Não foi possível instalar o assistente:' -ForegroundColor Red
+  Write-Host ('  ' + $_.Exception.Message)
+  Start-Sleep -Seconds 20
   return
 }
 Write-Host ''
-Write-Host '  Compartilhar Tela - Assistente de áudio' -ForegroundColor Green
-Write-Host '  Só aceita conexões deste computador e da página do Compartilhar Tela.' -ForegroundColor DarkGray
-Write-Host ''
-[Assistente]::Iniciar()
+Write-Host '  Pronto! Pode voltar para a página do Compartilhar Tela.' -ForegroundColor Green
+Write-Host '  Da próxima vez ela abre o assistente sozinha. Esta janela fecha em instantes.' -ForegroundColor DarkGray
+Start-Sleep -Seconds 5
