@@ -297,7 +297,7 @@ public static class Assistente
         [PreserveSig] int SetGroupingParam(IntPtr a, IntPtr b);
         [PreserveSig] int RegisterAudioSessionNotification(IntPtr n);
         [PreserveSig] int UnregisterAudioSessionNotification(IntPtr n);
-        [PreserveSig] int GetSessionIdentifier(IntPtr p);
+        [PreserveSig] int GetSessionIdentifier(out IntPtr id);
         [PreserveSig] int GetSessionInstanceIdentifier(IntPtr p);
         [PreserveSig] int GetProcessId(out uint pid);
         [PreserveSig] int IsSystemSoundsSession();
@@ -321,7 +321,43 @@ public static class Assistente
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool Process32NextW(IntPtr h, ref PROCESSENTRY32 e);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
 
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern uint QueryDosDevice(string dispositivo, StringBuilder destino, int max);
+
     class Proc { public uint Ppid; public string Exe; }
+
+    // \Device\HarddiskVolumeN -> C:  (montado uma vez)
+    static readonly Dictionary<string, string> unidades = new Dictionary<string, string>();
+    static string CaminhoParaDos(string nt)
+    {
+        if (nt == null || !nt.StartsWith("\\Device\\", StringComparison.OrdinalIgnoreCase)) return null;
+        lock (unidades)
+        {
+            if (unidades.Count == 0)
+                for (char letra = 'A'; letra <= 'Z'; letra++)
+                {
+                    var sb = new StringBuilder(1024);
+                    if (QueryDosDevice(letra + ":", sb, sb.Capacity) != 0) unidades[sb.ToString().Split('\0')[0]] = letra + ":";
+                }
+            foreach (var kv in unidades)
+                if (nt.StartsWith(kv.Key + "\\", StringComparison.OrdinalIgnoreCase)) return kv.Value + nt.Substring(kv.Key.Length);
+        }
+        return null;
+    }
+
+    // O identificador da sessão de áudio tem o formato  {endpoint}|\Device\HarddiskVolumeN\...\app.exe%b{sid}.
+    // Isso dá o caminho do programa SEM abrir o processo dele (anti-cheats vigiam quem abre o processo de um jogo).
+    static string CaminhoDoIdentificador(string ident)
+    {
+        if (string.IsNullOrEmpty(ident)) return null;
+        int a = ident.IndexOf('|'); if (a < 0) return null;
+        string resto = ident.Substring(a + 1);
+        int b = resto.IndexOf("%b", StringComparison.OrdinalIgnoreCase);
+        if (b >= 0) resto = resto.Substring(0, b);
+        return CaminhoParaDos(resto);
+    }
+
+    static readonly Dictionary<string, string> cacheNomes = new Dictionary<string, string>();
 
     static Dictionary<uint, Proc> Processos()
     {
@@ -351,30 +387,27 @@ public static class Assistente
         return atual;
     }
 
-    static string NomeAmigavel(uint pid, out string exe)
+    // Nome do aplicativo SEM abrir o processo: usa o caminho do arquivo (que veio da sessão de áudio) e lê a descrição
+    // do arquivo no disco. Sem caminho, usa só o nome do executável. O resultado fica em cache.
+    static string NomeDoApp(uint pid, Dictionary<uint, string> caminhos, Dictionary<uint, Proc> mapa, out string exe)
     {
-        exe = "";
-        try
-        {
-            using (var pr = Process.GetProcessById((int)pid))
-            {
-                exe = pr.ProcessName;
-                string nome = exe;
-                try
-                {
-                    var d = pr.MainModule.FileVersionInfo.FileDescription;
-                    if (!string.IsNullOrWhiteSpace(d)) nome = d.Trim();
-                }
-                catch { }
-                return nome;
-            }
-        }
-        catch { return "Processo " + pid; }
+        string cam; caminhos.TryGetValue(pid, out cam);
+        Proc p; mapa.TryGetValue(pid, out p);
+        string baseNome = !string.IsNullOrEmpty(cam) ? Path.GetFileNameWithoutExtension(cam)
+                        : (p != null ? Path.GetFileNameWithoutExtension(p.Exe) : "processo " + pid);
+        exe = baseNome;
+        if (string.IsNullOrEmpty(cam)) return baseNome;
+        string nome;
+        lock (cacheNomes) { if (cacheNomes.TryGetValue(cam, out nome)) return nome; }
+        nome = baseNome;
+        try { var d = FileVersionInfo.GetVersionInfo(cam).FileDescription; if (!string.IsNullOrWhiteSpace(d)) nome = d.Trim(); } catch { }
+        lock (cacheNomes) cacheNomes[cam] = nome;
+        return nome;
     }
 
     static List<Dictionary<string, object>> ListarApps()
     {
-        var picos = new Dictionary<uint, double>(); var ativos = new Dictionary<uint, bool>();
+        var picos = new Dictionary<uint, double>(); var ativos = new Dictionary<uint, bool>(); var caminhos = new Dictionary<uint, string>();
         var mapa = Processos();
         IMMDeviceEnumerator en = null; IMMDeviceCollection col = null;
         try
@@ -403,6 +436,13 @@ public static class Assistente
                             uint pid; sc.GetProcessId(out pid);
                             if (pid == 0) continue;
                             uint raiz = Raiz(pid, mapa);
+                            IntPtr pid_ = IntPtr.Zero;
+                            if (sc.GetSessionIdentifier(out pid_) == 0 && pid_ != IntPtr.Zero)
+                            {
+                                string ident = Marshal.PtrToStringUni(pid_); Marshal.FreeCoTaskMem(pid_);
+                                string cam = CaminhoDoIdentificador(ident);
+                                if (cam != null && (pid == raiz || !caminhos.ContainsKey(raiz))) caminhos[raiz] = cam;
+                            }
                             int st; sc.GetState(out st);
                             float pk = 0; try { ((IAudioMeterInformation)sc).GetPeakValue(out pk); } catch { }
                             double antes; picos.TryGetValue(raiz, out antes); picos[raiz] = Math.Max(antes, pk);
@@ -429,7 +469,7 @@ public static class Assistente
         var lista = new List<Dictionary<string, object>>();
         foreach (var par in picos)
         {
-            string exe; string nome = NomeAmigavel(par.Key, out exe);
+            string exe; string nome = NomeDoApp(par.Key, caminhos, mapa, out exe);
             if (string.Equals(exe, "audiodg", StringComparison.OrdinalIgnoreCase)) continue;
             var d = new Dictionary<string, object>();
             d["pid"] = par.Key; d["nome"] = nome; d["exe"] = exe;
