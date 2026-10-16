@@ -831,6 +831,7 @@ function overlay(modo, msg) {
   $('carregando').hidden = modo !== 'carregando';
   $('ic-aviso').hidden = modo !== 'erro';
   $('btn-voltar').hidden = modo !== 'erro';
+  $('btn-tentar').hidden = modo !== 'erro' || !viewer || viewer.fatal;
   if (msg) $('overlay-msg').textContent = msg;
 }
 
@@ -857,15 +858,19 @@ function assistir(codigo) {
   status($('viewer-status'), 'Conectando…');
   overlay('carregando', 'Conectando à sala ' + codigo + '…');
 
+  if (typeof RTCPeerConnection === 'undefined') {
+    overlay('erro', 'Este navegador não suporta transmissão ao vivo (WebRTC). Use Chrome, Edge ou Firefox atualizados.');
+    return;
+  }
   const v = { codigo, peer: null, conn: null, call: null, ok: false, jaConectou: false, fim: false, aguardando: false, tentativas: 0, bytes: -1, parado: 0, vigia: null, stream: null, fila: [], filhos: new Map() };
   viewer = v;
   abrirConexao(v);
   v.vigia = setInterval(() => vigiar(v), 2000);
 }
 
-function encerrarViewer(v, msg) {
+function encerrarViewer(v, msg, fatal) {
   if (viewer !== v) return;
-  v.fim = true;
+  v.fim = true; v.fatal = !!fatal;
   status($('viewer-status'), 'Desconectado', 'erro');
   overlay('erro', msg);
 }
@@ -873,7 +878,7 @@ function encerrarViewer(v, msg) {
 // Perdeu a conexão (internet instável, queda do servidor...): tenta voltar sozinho, sem F5.
 function reconectar(v, motivo) {
   if (viewer !== v || v.fim || v.aguardando) return;
-  if (v.tentativas >= 6) return encerrarViewer(v, 'Não foi possível reconectar. ' + motivo);
+  if (v.tentativas >= 6) return encerrarViewer(v, 'Não foi possível conectar. ' + motivo + ' Dicas: desative VPN/bloqueador de anúncios para este site, tente outra rede (ex.: dados do celular) ou outro navegador.' + (v.diag ? ' [' + v.diag + ']' : ''));
   v.tentativas++;
   v.aguardando = true;
   v.stream = null; v.fila = []; v.filhos.clear();
@@ -894,17 +899,22 @@ function abrirConexao(v) {
   const peer = criarPeer();
   v.peer = peer;
   const atual = () => viewer === v && v.peer === peer; // ignora eventos de conexões antigas
+  v.diag = 'servidor';
+  // servidor de salas que nunca responde: não espera o PeerJS desistir sozinho (~20 s)
+  setTimeout(() => { if (atual() && !peer.open && !v.ok) { v.diag = 'sem resposta do servidor de salas'; reconectar(v, 'Sem resposta do servidor de salas.'); } }, 10000);
 
   peer.on('open', () => {
     if (!atual()) return;
+    v.diag = 'sala';
+    overlay('carregando', 'Procurando a sala ' + v.codigo + '…');
     const conn = peer.connect(PREFIXO_ID + v.codigo, { reliable: true, metadata: { cid: cidCliente() } });
     v.conn = conn;
     const prazo = setTimeout(() => { if (atual() && !v.ok) reconectar(v, 'A sala não respondeu.'); }, 15000);
-    conn.on('open', () => { if (atual() && !v.ok) overlay('carregando', 'Aguardando a imagem…'); });
+    conn.on('open', () => { v.diag = 'imagem'; if (atual() && !v.ok) overlay('carregando', 'Estabelecendo a conexão direta…'); });
     conn.on('data', (m) => {
       if (!atual() || !m) return;
-      if (m.tipo === 'cheio') encerrarViewer(v, 'A sala está cheia (máx. ' + MAX_ESPECTADORES + ').');
-      if (m.tipo === 'fim') encerrarViewer(v, 'A transmissão terminou.');
+      if (m.tipo === 'cheio') encerrarViewer(v, 'A sala está cheia (máx. ' + MAX_ESPECTADORES + ').', true);
+      if (m.tipo === 'fim') encerrarViewer(v, 'A transmissão terminou.', true);
       if (m.tipo === 'via-relay' && !v.ok) overlay('carregando', 'Recebendo a imagem por repasse…');
       if (m.tipo === 'repassar') { v.fila.push(m); repassarFila(v); }
       if (m.tipo === 'refazer') reconectar(v, 'O repasse caiu.');
@@ -942,7 +952,7 @@ function abrirConexao(v) {
       if (pc) pc.addEventListener('iceconnectionstatechange', () => {
         if (!atual()) return;
         const e = pc.iceConnectionState;
-        if (e === 'failed') reconectar(v, 'A conexão falhou.');
+        if (e === 'failed') { v.diag = 'ice-failed'; reconectar(v, 'A conexão direta falhou (rede/firewall bloqueando).'); }
         else if (e === 'disconnected') status(st, 'Conexão instável…', 'erro');
         else if (e === 'connected' || e === 'completed') status(st, 'Ao vivo', 'ok');
       });
@@ -955,9 +965,10 @@ function abrirConexao(v) {
   peer.on('error', (err) => {
     if (!atual()) return;
     if (err.type === 'peer-unavailable') {
-      if (!v.jaConectou) return encerrarViewer(v, 'Sala não encontrada. Confira o código.');
+      if (!v.jaConectou) return encerrarViewer(v, 'Sala não encontrada. Confira o código.', true);
       return reconectar(v, 'A sala não respondeu.'); // o host pode estar voltando
     }
+    v.diag = (err.type || 'erro');
     reconectar(v, 'Erro de conexão.');
   });
 }
@@ -1087,6 +1098,7 @@ $('form-assistir').onsubmit = (e) => { e.preventDefault(); assistir($('codigo').
 $('codigo').oninput = (e) => { e.target.value = limparCodigo(e.target.value); };
 $('btn-sair').onclick = sairViewer;
 $('btn-voltar').onclick = sairViewer;
+$('btn-tentar').onclick = () => { if (viewer) { const c = viewer.codigo; sairViewer(); assistir(c); } };
 $('btn-sair-vista').onclick = sairViewer;
 
 // ---------- Player: som, modos de exibição, ajuste e tamanho ----------
