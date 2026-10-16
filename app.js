@@ -488,10 +488,11 @@ function aceitarEspectador(h, conn) {
       setTimeout(() => conn.close(), 300);
       return;
     }
-    const v = { conn, call: null, num: ++h.contador, cid, relay: null, filhos: new Set(), pronto: false, removido: false };
+    const v = { conn, nome: limparNome(conn.metadata && conn.metadata.nome), call: null, num: ++h.contador, cid, relay: null, filhos: new Set(), pronto: false, removido: false };
     h.viewers.set(conn.peer, v);
     conn.on('close', () => removerEspectador(h, v));
     conn.on('error', () => removerEspectador(h, v));
+    conn.on('data', (m) => { if (m && m.tipo === 'nome') { v.nome = limparNome(m.nome); if (host === h) renderLista(); } });
 
     // até MAX_DIRETOS o host envia direto; acima disso, outro espectador repassa (poupa o PC de quem joga)
     const r = diretos(h) >= maxDiretos(h) ? escolherRepassador(h) : null;
@@ -773,7 +774,7 @@ function renderLista() {
     const av = document.createElement('span'); av.className = 'avatar'; av.textContent = v.num;
     const nome = document.createElement('span'); nome.className = 'nome';
     const via = v.relay && host.viewers.get(v.relay);
-    nome.textContent = 'Espectador ' + v.num + (via ? ' · via ' + via.num : v.filhos.size ? ' · repassa para ' + v.filhos.size : '');
+    nome.textContent = (v.nome || 'Espectador ' + v.num) + (via ? ' · via ' + via.num : v.filhos.size ? ' · repassa para ' + v.filhos.size : '');
     const on = document.createElement('i'); on.className = 'on';
     const x = document.createElement('button'); x.className = 'tirar'; x.title = 'Remover da sala';
     x.innerHTML = '<svg class="ic"><use href="#i-x"/></svg>';
@@ -833,6 +834,18 @@ function overlay(modo, msg) {
   $('btn-voltar').hidden = modo !== 'erro';
   $('btn-tentar').hidden = modo !== 'erro' || !viewer || viewer.fatal;
   if (msg) $('overlay-msg').textContent = msg;
+}
+
+// Nome do espectador: guardado por 1 ano (localStorage + cookie de reserva).
+function limparNome(n) { return String(n || '').replace(/[ -<>]/g, '').trim().slice(0, 24); }
+function lerNome() {
+  try { const n = limparNome(localStorage.getItem('nomeViewer')); if (n) return n; } catch {}
+  const m = document.cookie.match(/(?:^|; )nomeViewer=([^;]*)/);
+  try { return m ? limparNome(decodeURIComponent(m[1])) : ''; } catch { return ''; }
+}
+function gravarNome(n) {
+  try { localStorage.setItem('nomeViewer', n); } catch {}
+  try { document.cookie = 'nomeViewer=' + encodeURIComponent(n) + '; max-age=31536000; path=/; SameSite=Lax'; } catch {}
 }
 
 // Identificador estável deste navegador: permite ao host reconhecer uma reconexão.
@@ -907,9 +920,10 @@ function abrirConexao(v) {
     if (!atual()) return;
     v.diag = 'sala';
     overlay('carregando', 'Procurando a sala ' + v.codigo + '…');
-    const conn = peer.connect(PREFIXO_ID + v.codigo, { reliable: true, metadata: { cid: cidCliente() } });
+    const conn = peer.connect(PREFIXO_ID + v.codigo, { reliable: true, metadata: { cid: cidCliente(), nome: lerNome() } });
     v.conn = conn;
     const prazo = setTimeout(() => { if (atual() && !v.ok) reconectar(v, 'A sala não respondeu.'); }, 15000);
+    v.conn.nomeEnviar = () => { try { conn.open && conn.send({ tipo: 'nome', nome: lerNome() }); } catch {} };
     conn.on('open', () => { v.diag = 'imagem'; if (atual() && !v.ok) overlay('carregando', 'Estabelecendo a conexão direta…'); });
     conn.on('data', (m) => {
       if (!atual() || !m) return;
@@ -1097,6 +1111,14 @@ $('btn-enviar').onclick = () => {
 $('form-assistir').onsubmit = (e) => { e.preventDefault(); assistir($('codigo').value); };
 $('codigo').oninput = (e) => { e.target.value = limparCodigo(e.target.value); };
 $('btn-sair').onclick = sairViewer;
+const campoNome = $('viewer-nome');
+campoNome.value = lerNome();
+campoNome.addEventListener('input', () => {
+  const n = limparNome(campoNome.value);
+  gravarNome(n);
+  clearTimeout(campoNome.t);
+  campoNome.t = setTimeout(() => { if (viewer && viewer.conn && viewer.conn.nomeEnviar) viewer.conn.nomeEnviar(); }, 400);
+});
 $('btn-voltar').onclick = sairViewer;
 $('btn-tentar').onclick = () => { if (viewer) { const c = viewer.codigo; sairViewer(); assistir(c); } };
 $('btn-sair-vista').onclick = sairViewer;
