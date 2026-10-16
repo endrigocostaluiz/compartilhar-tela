@@ -460,7 +460,6 @@
           <section id="tela-viewer" class="tela viewer" hidden>
             <div class="barra-topo">
               <div class="marca-mini"><img src="icons/logo.svg" width="28" height="28" alt=""><b>Sala</b><span class="mono cod" id="viewer-codigo"></span></div>
-              <input type="text" id="viewer-nome" class="campo-nome" maxlength="24" placeholder="Seu nome (opcional)" autocomplete="nickname" aria-label="Seu nome, visível para quem transmite">
               <div class="status" id="viewer-status">Conectando…</div>
               <button id="btn-sair" class="btn peq"><svg class="ic"><use href="#i-exit"/></svg>Sair</button>
             </div>
@@ -514,6 +513,10 @@
                     <button type="button" data-v="cover">Preencher</button>
                     <button type="button" data-v="fill">Esticar</button>
                   </div>
+                </div>
+                <div class="vgrupo">
+                  <span class="rot">Seu nome (aparece para quem transmite)</span>
+                  <input type="text" id="viewer-nome" class="campo-nome" maxlength="24" placeholder="Seu nome (opcional)" autocomplete="nickname" aria-label="Seu nome, visível para quem transmite">
                 </div>
                 <button id="btn-sair-vista" class="btn peq perigo sair-vista" title="Sair da sala"><svg class="ic"><use href="#i-exit"/></svg>Sair da sala</button>
               </div>

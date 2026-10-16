@@ -526,6 +526,5 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
 .apps-acoes { display: flex; flex-wrap: wrap; gap: 10px; }
 .apps-baixar[hidden], .apps-baixar ol[hidden] { display: none; }
 
-.campo-nome { margin-left: auto; width: 170px; max-width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--bd, rgba(255,255,255,.14)); background: rgba(255,255,255,.05); color: inherit; font: inherit; font-size: .86rem; }
+.campo-nome { width: 190px; max-width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--bd, rgba(255,255,255,.14)); background: rgba(255,255,255,.05); color: inherit; font: inherit; font-size: .86rem; }
 .campo-nome:focus { outline: none; border-color: var(--em2); }
-.viewer .barra-topo .campo-nome + .status { margin-left: 0; }
