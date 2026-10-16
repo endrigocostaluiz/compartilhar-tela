@@ -454,7 +454,7 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
   .cta-in { padding: 48px 20px; }
 }
 
-.sair-vista { margin-left: auto; align-self: flex-end; }
+.sair-vista { margin-left: auto; }
 
 /* Ajustes ao vivo na tela de transmissão */
 .host-barra { flex-direction: column; align-items: stretch; gap: 16px; }
@@ -526,5 +526,7 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
 .apps-acoes { display: flex; flex-wrap: wrap; gap: 10px; }
 .apps-baixar[hidden], .apps-baixar ol[hidden] { display: none; }
 
-.campo-nome { width: 190px; max-width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--bd, rgba(255,255,255,.14)); background: rgba(255,255,255,.05); color: inherit; font: inherit; font-size: .86rem; }
+.vrodape { flex: 1 0 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 12px; border-top: 1px solid var(--borda); }
+.nome-linha { display: flex; align-items: center; gap: 8px; flex: 1; max-width: 380px; color: var(--mut); }
+.campo-nome { flex: 1; min-width: 0; width: 100%; padding: 8px 12px; font-size: .86rem; }
 .campo-nome:focus { outline: none; border-color: var(--em2); }
