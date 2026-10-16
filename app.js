@@ -1111,6 +1111,10 @@ $('btn-enviar').onclick = () => {
 $('form-assistir').onsubmit = (e) => { e.preventDefault(); assistir($('codigo').value); };
 $('codigo').oninput = (e) => { e.target.value = limparCodigo(e.target.value); };
 $('btn-sair').onclick = sairViewer;
+// mede a barra de controles para o modo cinema deixar o vídeo ocupar exatamente o resto da tela
+if (window.ResizeObserver) {
+  new ResizeObserver(() => document.documentElement.style.setProperty('--barra-h', Math.ceil($('barra-vista').getBoundingClientRect().height) + 'px')).observe($('barra-vista'));
+}
 const campoNome = $('viewer-nome');
 campoNome.value = lerNome();
 campoNome.addEventListener('input', () => {

@@ -201,12 +201,15 @@ form input, .linha input { flex: 1; min-width: 0; }
 .cta-mini:hover b { text-decoration: underline; }
 
 /* Cinema: fundo escuro cobrindo a página, vídeo grande e centralizado */
-.palco.m-cinema { position: fixed; inset: 0; z-index: 100; width: 100%; max-width: none; margin: 0; padding: 16px; gap: 14px; align-items: center; justify-content: center; background: rgba(0,0,0,.97); animation: entra .3s var(--ease) both; }
-.palco.m-cinema .player { width: min(96vw, calc((100vh - 150px) * 16 / 9)); flex: none; box-shadow: 0 0 120px rgba(16,185,129,.2); }
-.palco.m-cinema .barra-vista { width: min(96vw, 1100px); }
+.palco.m-cinema { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; width: 100%; max-width: none; margin: 0; padding: 12px; gap: 12px; overflow: auto; background: rgba(0,0,0,.97); animation: entra .3s var(--ease) both; }
+/* altura do vídeo = o que sobra da tela depois da barra de controles (medida em --barra-h por JS); margin:auto centraliza sem cortar o topo */
+.palco.m-cinema .player { width: min(100%, calc((100vh - var(--barra-h, 170px) - 36px) * 16 / 9)); min-width: min(100%, 280px); flex: none; margin-top: auto; box-shadow: 0 0 120px rgba(16,185,129,.2); }
+.palco.m-cinema .barra-vista { width: min(100%, 1100px); flex: none; margin-bottom: auto; }
+@supports (height: 100dvh) { .palco.m-cinema .player { width: min(100%, calc((100dvh - var(--barra-h, 170px) - 36px) * 16 / 9)); min-width: min(100%, 280px); } }
 /* Janela cheia: ocupa só o navegador (sem tela cheia do sistema) */
-.palco.m-janela { position: fixed; inset: 0; z-index: 100; width: 100%; max-width: none; margin: 0; gap: 0; background: #000; }
-.palco.m-janela .player { flex: 1; min-height: 0; width: 100%; aspect-ratio: auto; border: 0; border-radius: 0; }
+.palco.m-janela { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; width: 100%; max-width: none; margin: 0; gap: 0; background: #000; overflow: auto; }
+.palco.m-janela .barra-vista { flex: none; }
+.palco.m-janela .player { flex: 1 1 0; min-height: 120px; width: 100%; aspect-ratio: auto; border: 0; border-radius: 0; }
 .palco.m-janela .barra-vista { border-radius: 0; border: 0; border-top: 1px solid var(--borda); background: rgba(13,18,31,.98); justify-content: center; }
 /* Tela cheia no monitor (Fullscreen API) */
 .player:fullscreen { width: 100vw; height: 100vh; aspect-ratio: auto; border: 0; border-radius: 0; }
@@ -530,3 +533,14 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
 .nome-linha { display: flex; align-items: center; gap: 8px; flex: 1; max-width: 380px; color: var(--mut); }
 .campo-nome { flex: 1; min-width: 0; width: 100%; padding: 8px 12px; font-size: .86rem; }
 .campo-nome:focus { outline: none; border-color: var(--em2); }
+
+/* Telas baixas (notebook pequeno, celular deitado): barra mais compacta para caber sem cortar */
+@media (max-height: 640px) {
+  .barra-vista { gap: 8px 14px; padding: 8px 10px; }
+  .barra-vista .rot { display: none; }
+  .vgrupo .seg button { padding: 5px 8px; font-size: .78rem; }
+  .vrodape { padding-top: 8px; }
+  .campo-nome { padding: 6px 10px; }
+  .palco.m-cinema { padding: 8px; gap: 8px; }
+  .cta-mini { display: none; }
+}
