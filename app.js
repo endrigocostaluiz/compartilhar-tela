@@ -554,27 +554,6 @@ async function medirEspectador(call) {
   return { perda, rtt, disp, enc };
 }
 
-// Mostra como o vídeo está sendo codificado: hardware (leve para o jogo) ou software (usa a CPU).
-function mostrarCodificador(h, vs, brutas) {
-  const el = $('host-enc');
-  if (!el) return;
-  const i = brutas.findIndex((m) => m && m.enc);
-  if (i < 0) { el.textContent = vs.length ? 'Codificação: medindo…' : 'Codificação: aguardando o primeiro espectador'; el.className = 'codec-info'; return; }
-  const v = vs[i], e = brutas[i].enc;
-  let ms = null;
-  if (v.encAnt && e.frames > v.encAnt.frames) ms = ((e.tempo - v.encAnt.tempo) / (e.frames - v.encAnt.frames)) * 1000;
-  v.encAnt = { frames: e.frames, tempo: e.tempo };
-  const impl = String(e.impl || '');
-  const hw = e.he === true || /external|hardware|mediafoundation|nvenc|videotoolbox|d3d|vaapi|accelerat/i.test(impl);
-  const sw = !hw && (e.he === false || /libvpx|openh264|software|libaom|ffmpeg/i.test(impl));
-  const codec = (e.codec || '').replace('video/', '') || '?';
-  const modo = hw ? 'hardware' : sw ? 'software' : 'tipo não informado';
-  const envios = diretos(h);
-  el.className = 'codec-info' + (sw ? ' aviso' : hw ? ' ok' : '');
-  el.textContent = `Codificação: ${codec} · ${modo}` + (ms !== null ? ` · ${ms.toFixed(1)} ms/quadro` : '') + ` · ${envios} ${envios === 1 ? 'envio direto' : 'envios diretos'}`
-    + (sw ? ' — usa a CPU e pode custar FPS no jogo; confira a aceleração de hardware do navegador.' : '');
-}
-
 function mostrarRede(estado) {
   const el = $('host-rede');
   if (!el) return;
@@ -591,7 +570,6 @@ async function monitorarRede() {
   const vs = [...h.viewers.values()].filter((v) => v.call);
   const brutas = await Promise.all(vs.map((v) => medirEspectador(v.call)));
   const medidas = brutas.filter(Boolean);
-  if (host === h) mostrarCodificador(h, vs, brutas);
   if (host !== h || !medidas.length) { mostrarRede(); return; }
 
   const perda = Math.max(...medidas.map((m) => m.perda));
@@ -727,19 +705,14 @@ async function trocarFonte() {
 
 // ---- Medidor do áudio que está sendo enviado (mostra na hora se há som ou não) ----
 let vuTimer = null, vuNodes = null;
-function textoAudioSemFaixa() {
-  if (escolha.audioModo === 'nenhum') return 'Você escolheu transmitir sem áudio.';
-  if (escolha.audioModo === 'aplicativos') return host && host.avisoAudio ? host.avisoAudio : 'Assistente de áudio indisponível: transmitindo sem áudio.';
-  return 'Nenhum áudio está sendo enviado. Ao compartilhar a tela inteira, marque "Compartilhar áudio do sistema" na janela do navegador (janelas não enviam som). O som do próprio navegador pode ficar de fora da captura do sistema.';
-}
 function iniciarVU() {
   clearInterval(vuTimer);
   if (vuNodes) { try { vuNodes.src.disconnect(); } catch {} vuNodes = null; }
-  const barra = $('vu').firstElementChild, txt = $('audio-txt'), box = $('audio-info');
+  const barra = $('vu').firstElementChild;
   barra.style.width = '0%';
   if (!host) return;
   const h = host;
-  if (!h.audioReal) { txt.textContent = textoAudioSemFaixa(); box.className = 'audio-info aviso'; return; }
+  if (!h.audioReal) return;
   const ctx = garantirCtx(h);
   const src = ctx.createMediaStreamSource(new MediaStream([h.stream.getAudioTracks()[0]]));
   const an = ctx.createAnalyser(); an.fftSize = 256;
@@ -755,14 +728,6 @@ function iniciarVU() {
     for (let i = 0; i < buf.length; i++) pico = Math.max(pico, Math.abs(buf[i] - 128));
     const nivel = h.audioLigado ? Math.min(100, Math.round((pico / 128) * 140)) : 0;
     barra.style.width = nivel + '%';
-    if (!h.audioLigado) { txt.textContent = 'Áudio desligado: os espectadores não ouvem nada.'; box.className = 'audio-info aviso'; return; }
-    if (nivel > 3) { h.silencioDesde = Date.now(); txt.textContent = 'Enviando áudio ✓'; box.className = 'audio-info ok'; }
-    else if (Date.now() - h.silencioDesde > 8000) {
-      txt.textContent = h.audioOrigem === 'aplicativos'
-        ? 'Sem som no momento. Confira se o aplicativo marcado está tocando.'
-        : 'Sem som no momento. Se esperava ouvir algo, confira se o áudio do sistema foi marcado ao compartilhar.';
-      box.className = 'audio-info aviso';
-    }
   }, 140);
 }
 
