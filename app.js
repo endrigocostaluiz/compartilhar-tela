@@ -715,20 +715,24 @@ function iniciarVU() {
   if (!h.audioReal) return;
   const ctx = garantirCtx(h);
   const src = ctx.createMediaStreamSource(new MediaStream([h.stream.getAudioTracks()[0]]));
-  const an = ctx.createAnalyser(); an.fftSize = 256;
+  const an = ctx.createAnalyser(); an.fftSize = 2048; // janela de ~43 ms: não perde os picos entre uma leitura e outra
   src.connect(an); // não conecta ao destino: nada toca nas caixas de som
   vuNodes = { src, an };
   h.silencioDesde = Date.now();
-  const buf = new Uint8Array(an.fftSize);
+  const buf = new Float32Array(an.fftSize);
+  let atual = 0;
   vuTimer = setInterval(() => {
     if (host !== h) return clearInterval(vuTimer);
     if (document.hidden) return;
-    an.getByteTimeDomainData(buf);
+    an.getFloatTimeDomainData(buf);
     let pico = 0;
-    for (let i = 0; i < buf.length; i++) pico = Math.max(pico, Math.abs(buf[i] - 128));
-    const nivel = h.audioLigado ? Math.min(100, Math.round((pico / 128) * 140)) : 0;
-    barra.style.width = nivel + '%';
-  }, 140);
+    for (let i = 0; i < buf.length; i++) pico = Math.max(pico, Math.abs(buf[i]));
+    // escala em decibéis (como os medidores de verdade): -50 dB = vazio, -3 dB = cheio; sobe na hora, desce suave
+    const db = pico > 0.0003 ? 20 * Math.log10(pico) : -100;
+    const alvo = h.audioLigado ? Math.max(0, Math.min(100, ((db + 50) / 47) * 100)) : 0;
+    atual = alvo > atual ? alvo : atual * 0.82 + alvo * 0.18;
+    barra.style.width = atual.toFixed(0) + '%';
+  }, 70);
 }
 
 function renderLista() {
