@@ -26,6 +26,8 @@
   const fxs = [];
   function aplicarEstado() {
     html.classList.toggle('fx-off', !habilitado());
+    // animações CSS (orbes borrados, faixas, etc.) também páram com a janela sem foco/oculta: libera a GPU para o vídeo/jogo
+    html.classList.toggle('fx-pausa', document.hidden || !document.hasFocus());
     fxs.forEach((f) => f.reavaliar());
     atualizarBotoes();
   }

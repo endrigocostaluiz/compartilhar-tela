@@ -283,3 +283,8 @@ html.app-instalado .v2-entrar form { flex: 1 1 280px; width: auto; max-width: 44
 @media (max-width: 620px) {
   html.app-instalado .v2-entrar form { flex: none; width: 100%; max-width: none; }
 }
+
+/* Não gasta GPU à toa: janela sem foco ou aba oculta = nenhuma animação CSS rodando */
+html.fx-pausa *, html.fx-pausa *::before, html.fx-pausa *::after { animation-play-state: paused !important; }
+/* Transmitindo/assistindo: o fundo borrado animado some (pesa no compositor e fica atrás do vídeo) */
+body.foco .orb, body.foco .aurora { display: none !important; }
