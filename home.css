@@ -285,6 +285,9 @@ html.app-instalado .v2-entrar form { flex: 1 1 280px; width: auto; max-width: 44
 }
 
 /* Não gasta GPU à toa: janela sem foco ou aba oculta = nenhuma animação CSS rodando */
-html.fx-pausa *, html.fx-pausa *::before, html.fx-pausa *::after { animation-play-state: paused !important; }
+/* só as animações INFINITAS (as de entrada, como .tela, precisam terminar mesmo sem foco, senão a tela fica invisível) */
+html.fx-pausa .orb, html.fx-pausa .aurora, html.fx-pausa .brilho::after, html.fx-pausa .pulsa, html.fx-pausa .tag-live i, html.fx-pausa .anel,
+html.fx-pausa .mk-live i, html.fx-pausa .mk-linha, html.fx-pausa .mk-cursor, html.fx-pausa .rede .fios path, html.fx-pausa .faixa-lista,
+html.fx-pausa .v2-acento, html.fx-pausa .v2-rolar span, html.fx-pausa .j-live i, html.fx-pausa .j-codigo b, html.fx-pausa .lig use { animation-play-state: paused !important; }
 /* Transmitindo/assistindo: o fundo borrado animado some (pesa no compositor e fica atrás do vídeo) */
 body.foco .orb, body.foco .aurora { display: none !important; }
