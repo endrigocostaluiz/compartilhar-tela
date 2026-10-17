@@ -130,12 +130,12 @@ function marcarSeg(idSeg, valor) {
   $(idSeg).querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(valor)));
 }
 function atualizarDica() {
-  const mbps = kbpsBase(escolha.res, escolha.fps) / 1000;
+  // só avisa quando a qualidade escolhida é pesada; sem a linha fixa de consumo
+  const pesado = kbpsBase(escolha.res, escolha.fps) / 1000 >= 4;
   const dica = $('dica-qualidade');
-  const txt = `Cada espectador usa ~${mbps.toFixed(1).replace('.', ',')} Mbps do seu upload (com poucos espectadores).`;
-  const pesado = mbps >= 4;
-  dica.className = 'dica' + (pesado ? ' aviso' : '');
-  dica.textContent = pesado ? txt + ' Qualidade alta: use com poucas pessoas e boa internet.' : txt;
+  dica.className = 'dica aviso';
+  dica.hidden = !pesado;
+  dica.textContent = 'Qualidade alta: use com poucas pessoas e boa internet.';
 }
 function salvarEscolha() {
   try { localStorage.setItem('escolha', JSON.stringify(escolha)); } catch {}
