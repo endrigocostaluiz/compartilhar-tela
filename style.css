@@ -536,3 +536,8 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
   .palco.m-cinema { padding: 8px; gap: 8px; }
   .cta-mini { display: none; }
 }
+
+.retomar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 12px 14px; border-radius: var(--r-md); background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.4); font-size: .9rem; }
+.retomar[hidden] { display: none; }
+.retomar b { color: var(--em2); letter-spacing: .15em; }
+.retomar-acoes { display: flex; gap: 8px; }

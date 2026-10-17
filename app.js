@@ -329,6 +329,26 @@ function faixaSilenciosa(h) {
   return h.ctx.createMediaStreamDestination().stream.getAudioTracks()[0];
 }
 
+// Sala recuperável: se o navegador/PC fechar de repente (queda de energia, travamento), a página guarda o código
+// por algumas horas e oferece "Retomar sala". Encerrar de propósito apaga na hora. Custo: uma gravação pequena por minuto.
+const SALA_KEY = 'salaAtiva', SALA_VALIDADE = 6 * 3600 * 1000;
+let retomarCodigo = '';
+function salaSalva() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SALA_KEY) || 'null');
+    if (s && /^[A-Z0-9]{6}$/.test(s.codigo) && Date.now() - s.t < SALA_VALIDADE) return s;
+    if (s) localStorage.removeItem(SALA_KEY);
+  } catch {}
+  return null;
+}
+function guardarSala(codigo) { try { localStorage.setItem(SALA_KEY, JSON.stringify({ codigo, t: Date.now() })); } catch {} }
+function esquecerSala() { try { localStorage.removeItem(SALA_KEY); } catch {} }
+function mostrarRetomar() {
+  const s = salaSalva();
+  $('retomar').hidden = !s;
+  if (s) $('retomar-cod').textContent = s.codigo;
+}
+
 async function iniciarHost() {
   const [w, h] = RESOLUCOES[escolha.res];
   if (escolha.audioModo === 'aplicativos' && ehWindows && Assistente.estado !== 'conectado') Assistente.abrirPeloProtocolo();
@@ -356,6 +376,7 @@ async function iniciarHost() {
   const stream = new MediaStream([vt]);
   host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null, ctx: null, audioReal: false, audioLigado: true, nivel: 0, ruim: 0, bom: 0, monitor: null, sinal: null, repasse: escolha.repasse !== false, capChave: '' };
   host.monitor = setInterval(monitorarRede, 2000);
+  host.batida = setInterval(() => { if (host && host.codigo) guardarSala(host.codigo); }, 60000);
   host.audioReal = !!faixaA;
   host.audioOrigem = faixaA ? escolha.audioModo : 'nenhum';
   host.avisoAudio = avisoAudio;
@@ -375,20 +396,22 @@ async function iniciarHost() {
   $('host-res').textContent = `${cfg.width || w}×${cfg.height || h} · ${Math.round(cfg.frameRate || escolha.fps)} fps`;
   $('btn-enviar').hidden = !navigator.share;
   aplicarConteudo();
-  abrirSala(host, 0);
+  const fixo = retomarCodigo; retomarCodigo = '';
+  abrirSala(host, 0, fixo);
   if (escolha.audioModo === 'captura' && !host.audioReal) {
     host.avisoAudio = 'Sem áudio: marque "compartilhar áudio" ao escolher a tela inteira ou uma aba.';
   }
 }
 
-function abrirSala(h, tentativa) {
-  const codigo = novoCodigo();
+function abrirSala(h, tentativa, fixo) {
+  const codigo = fixo || novoCodigo();
   const peer = criarPeer(PREFIXO_ID + codigo);
   h.peer = peer;
 
   peer.on('open', () => {
     if (host !== h) return peer.destroy();
     h.codigo = codigo;
+    guardarSala(codigo);
     $('host-codigo').textContent = codigo;
     $('host-link').value = `${location.origin}${location.pathname}?sala=${codigo}`;
     status($('host-status'), 'Sala aberta. Envie o código ou o link.' + (h.avisoAudio ? ' ⚠ ' + h.avisoAudio : ''), 'ok');
@@ -416,9 +439,17 @@ function abrirSala(h, tentativa) {
 
   peer.on('error', (err) => {
     if (host !== h) return;
-    if (err.type === 'unavailable-id' && tentativa < 5) {
-      peer.destroy();
-      return abrirSala(h, tentativa + 1);
+    if (err.type === 'unavailable-id') {
+      // sala já existente (retomada ou servidor ainda segurando o código antigo): insiste no MESMO código por ~1 min
+      const mesmo = fixo || h.codigo;
+      if (mesmo && tentativa < 20) {
+        peer.destroy();
+        status($('host-status'), 'Recuperando a sala ' + mesmo + '…', 'erro');
+        setTimeout(() => { if (host === h) abrirSala(h, tentativa + 1, mesmo); }, 3000);
+        return;
+      }
+      if (!mesmo && tentativa < 5) { peer.destroy(); return abrirSala(h, tentativa + 1); }
+      if (mesmo) { peer.destroy(); h.codigo = ''; status($('host-status'), 'Não foi possível recuperar o código anterior. Criando uma sala nova…', 'erro'); return abrirSala(h, 0, ''); }
     }
     if (err.type === 'peer-unavailable') return; // espectador sumiu antes da chamada
     if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) return religar();
@@ -770,6 +801,8 @@ function pararHost() {
   clearInterval(h.timer);
   clearInterval(h.monitor);
   clearInterval(h.sinal);
+  clearInterval(h.batida);
+  esquecerSala(); // encerrou de propósito: não oferece retomar
   clearInterval(vuTimer); vuNodes = null;
   Assistente.pararCaptura();
   $('host-audio-apps').hidden = true;
@@ -780,6 +813,7 @@ function pararHost() {
   if (h.ctx) h.ctx.close().catch(() => {});
   $('preview').srcObject = null;
   mostrar('tela-inicio');
+  mostrarRetomar();
   if (escolha.audioModo !== 'aplicativos') Assistente.desligar();
 }
 
@@ -860,19 +894,25 @@ function encerrarViewer(v, msg, fatal) {
 // Perdeu a conexão (internet instável, queda do servidor...): tenta voltar sozinho, sem F5.
 function reconectar(v, motivo) {
   if (viewer !== v || v.fim || v.aguardando) return;
-  if (v.tentativas >= 6) return encerrarViewer(v, 'Não foi possível conectar. ' + motivo + ' Dicas: desative VPN/bloqueador de anúncios para este site, tente outra rede (ex.: dados do celular) ou outro navegador.' + (v.diag ? ' [' + v.diag + ']' : ''));
+  // já viu a transmissão: espera o transmissor voltar (queda de internet/energia) por até 15 min, sem sobrecarregar o servidor
+  const espera = v.jaConectou;
+  if (espera) {
+    v.desde = v.desde || Date.now();
+    if (Date.now() - v.desde > 15 * 60000) return encerrarViewer(v, 'O transmissor não voltou. Peça um novo link ou tente novamente.');
+  }
+  if (!espera && v.tentativas >= 6) return encerrarViewer(v, 'Não foi possível conectar. ' + motivo + ' Dicas: desative VPN/bloqueador de anúncios para este site, tente outra rede (ex.: dados do celular) ou outro navegador.' + (v.diag ? ' [' + v.diag + ']' : ''));
   v.tentativas++;
   v.aguardando = true;
   v.stream = null; v.fila = []; v.filhos.clear();
-  status($('viewer-status'), `Reconectando… (${v.tentativas}/6)`, 'erro');
-  overlay('carregando', `${motivo} Reconectando… (${v.tentativas}/6)`);
+  status($('viewer-status'), espera ? 'Aguardando o transmissor voltar…' : `Reconectando… (${v.tentativas}/6)`, 'erro');
+  overlay('carregando', espera ? 'A transmissão foi interrompida. Aguardando o transmissor voltar…' : `${motivo} Reconectando… (${v.tentativas}/6)`);
   const velho = v.peer;
   v.peer = null; v.call = null; v.conn = null; v.ok = false; v.bytes = -1; v.parado = 0;
   try { velho && velho.destroy(); } catch {}
   setTimeout(() => {
     v.aguardando = false;
     if (viewer === v && !v.fim) abrirConexao(v);
-  }, Math.min(1000 * v.tentativas, 5000));
+  }, espera && v.tentativas > 5 ? 10000 : Math.min(1000 * v.tentativas, 5000));
 }
 
 function abrirConexao(v) {
@@ -888,7 +928,7 @@ function abrirConexao(v) {
   peer.on('open', () => {
     if (!atual()) return;
     v.diag = 'sala';
-    overlay('carregando', 'Procurando a sala ' + v.codigo + '…');
+    overlay('carregando', v.jaConectou ? 'Aguardando o transmissor voltar…' : 'Procurando a sala ' + v.codigo + '…');
     const conn = peer.connect(PREFIXO_ID + v.codigo, { reliable: true, metadata: { cid: cidCliente(), nome: lerNome() } });
     v.conn = conn;
     const prazo = setTimeout(() => { if (atual() && !v.ok) reconectar(v, 'A sala não respondeu.'); }, 15000);
@@ -912,7 +952,7 @@ function abrirConexao(v) {
     call.answer(undefined, { sdpTransform: (sdp) => ajustarSdp(sdp, kbps) }); // não envia nada de volta
     call.on('stream', (stream) => {
       if (!atual()) return;
-      v.ok = true; v.jaConectou = true; v.tentativas = 0; v.parado = 0; v.bytes = -1;
+      v.ok = true; v.jaConectou = true; v.tentativas = 0; v.desde = 0; v.parado = 0; v.bytes = -1;
       v.stream = stream;
       repassarFila(v);
       video.srcObject = stream;
@@ -1018,6 +1058,9 @@ function sairViewer() {
 
 // ---------- Eventos ----------
 $('btn-compartilhar').onclick = iniciarHost;
+$('btn-retomar').onclick = () => { const s = salaSalva(); if (s) { retomarCodigo = s.codigo; iniciarHost(); } };
+$('btn-descartar').onclick = () => { esquecerSala(); mostrarRetomar(); };
+mostrarRetomar();
 $('btn-parar').onclick = pararHost;
 $('btn-trocar').onclick = trocarFonte;
 function atualizarBotaoRepasse() {
