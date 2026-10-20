@@ -374,7 +374,7 @@ async function iniciarHost() {
 
   // O stream enviado aos espectadores é estável: só as faixas dentro dele são trocadas.
   const stream = new MediaStream([vt]);
-  host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null, ctx: null, audioReal: false, audioLigado: true, nivel: 0, ruim: 0, bom: 0, monitor: null, sinal: null, repasse: escolha.repasse !== false, capChave: '' };
+  host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null, ctx: null, audioReal: false, audioLigado: true, nivel: 0, ruim: 0, bom: 0, monitor: null, sinal: null, repasse: escolha.repasse !== false, capChave: '', coPermitido: false, cos: new Map(), coOrdem: 0 };
   host.monitor = setInterval(monitorarRede, 2000);
   host.batida = setInterval(() => { if (host && host.codigo) guardarSala(host.codigo); }, 60000);
   host.audioReal = !!faixaA;
@@ -382,6 +382,7 @@ async function iniciarHost() {
   host.avisoAudio = avisoAudio;
   stream.addTrack(faixaA || faixaSilenciosa(host));
   mostrarAppsLive();
+  atualizarBotaoCo(); renderCo();
   iniciarVU();
   $('preview').srcObject = stream;
   sincronizarAjustesAoVivo();
@@ -419,6 +420,7 @@ function abrirSala(h, tentativa, fixo) {
   });
 
   peer.on('connection', (conn) => aceitarEspectador(h, conn));
+  peer.on('call', (call) => receberCo(h, call));
   // Se a conexão com o servidor de sinalização cair, tenta voltar até conseguir.
   // A imagem dos espectadores já conectados continua (é direta entre navegadores).
   const religar = () => {
@@ -457,6 +459,160 @@ function abrirSala(h, tentativa, fixo) {
   });
 }
 
+// ---- Transmissão conjunta: até 3 espectadores (aprovados pelo host) transmitem a própria tela junto, em tela dividida ----
+// A imagem de cada convidado chega ao host e segue para a sala como uma chamada extra (metadata.co = id do convidado),
+// pelos mesmos caminhos da imagem principal (direto ou por repasse). Cada espectador monta a grade de telas; o host não compõe nada.
+// Só vídeo: o áudio do convidado voltaria a ser capturado por quem usa "todo o áudio" (eco).
+const MAX_CO = 3; // convidados; com o host são até 4 telas
+const TITULO_PAGINA = document.title;
+const nomeDe = (v) => v.nome || 'Espectador ' + v.num;
+function enviar(v, m) { try { v.conn.send(m); } catch {} }
+const cheioCo = (h) => h.cos.size >= MAX_CO;
+// Cada tela ocupa uma fração do player: quanto mais telas, menos bitrate cada uma precisa.
+const kbpsCo = (h) => Math.max(150, Math.round(perfil(diretos(h)).kbps * [0.6, 0.6, 0.45, 0.35][Math.min(h.cos.size, 3)]));
+
+function definirCoPermitido(on) {
+  const h = host;
+  if (!h) return;
+  h.coPermitido = on;
+  if (!on) {
+    h.viewers.forEach((v) => { v.coPedido = false; });
+    encerrarTodosCo(h);
+  }
+  h.viewers.forEach((v) => enviar(v, { tipo: 'co-permitido', ok: on }));
+  atualizarBotaoCo();
+  renderCo();
+}
+
+function pedirCo(h, v) {
+  if (!h.coPermitido) return enviar(v, { tipo: 'co-recusado', motivo: 'desligado' });
+  if (h.cos.has(v.conn.peer) || cheioCo(h)) return enviar(v, { tipo: 'co-recusado', motivo: 'ocupado' });
+  v.coPedido = true;
+  renderCo();
+}
+
+function aceitarCo(h, v) {
+  if (!v.coPedido || cheioCo(h) || !h.coPermitido) return;
+  v.coPedido = false;
+  const co = { id: v.conn.peer, v, ordem: ++h.coOrdem, stream: null, call: null, t: null, el: null, preview: null, rotulo: null };
+  criarElCo(h, co);
+  // se a chamada dele não chegar logo, desiste e libera a vaga
+  co.t = setTimeout(() => { if (!co.stream) encerrarCo(h, co); }, 20000);
+  h.cos.set(co.id, co);
+  enviar(v, { tipo: 'co-aceito', ordem: co.ordem });
+  // com as vagas esgotadas, quem estava na fila precisa pedir de novo depois
+  if (cheioCo(h)) h.viewers.forEach((o) => { if (o.coPedido) { o.coPedido = false; enviar(o, { tipo: 'co-recusado', motivo: 'ocupado' }); } });
+  renderCo();
+}
+
+function recusarCo(h, v) {
+  v.coPedido = false;
+  enviar(v, { tipo: 'co-recusado', motivo: 'recusado' });
+  renderCo();
+}
+
+// Cartão de um convidado na tela do host: prévia da imagem dele e botão para parar.
+function criarElCo(h, co) {
+  const el = document.createElement('div'); el.className = 'co-ativo';
+  const preview = document.createElement('video'); preview.muted = true; preview.autoplay = true; preview.playsInline = true;
+  const linha = document.createElement('div'); linha.className = 'co-ativo-linha';
+  const rotulo = document.createElement('span');
+  const parar = document.createElement('button'); parar.className = 'btn peq perigo';
+  parar.innerHTML = '<svg class="ic"><use href="#i-stop"/></svg>Parar';
+  parar.onclick = () => encerrarCo(h, co);
+  linha.append(rotulo, parar);
+  el.append(preview, linha);
+  Object.assign(co, { el, preview, rotulo });
+}
+
+// A chamada de um espectador aprovado, com a tela dele.
+function receberCo(h, call) {
+  const co = h.cos.get(call.peer);
+  if (host !== h || !co || co.call || !call.metadata || !call.metadata.co) return call.close();
+  co.call = call;
+  call.answer(undefined, { sdpTransform: (sdp) => ajustarSdp(sdp, 2000) });
+  call.on('stream', (stream) => {
+    if (h.cos.get(co.id) !== co || co.stream === stream) return;
+    clearTimeout(co.t);
+    co.stream = stream;
+    if (!document.hidden) co.preview.srcObject = stream;
+    h.viewers.forEach((o) => { if (o !== co.v) { anunciarCo(o, co); ligarCo(h, o, co); } });
+    atualizarQualidade();
+    renderCo();
+  });
+  const caiu = () => encerrarCo(h, co);
+  call.on('close', caiu); call.on('error', caiu);
+}
+
+function anunciarCo(v, co) { enviar(v, { tipo: 'co-ativo', id: co.id, nome: nomeDe(co.v), ordem: co.ordem }); }
+
+// Entrega a tela de um convidado a um espectador: direto do host, ou pelo mesmo repassador que ele já usa.
+function ligarCo(h, v, co) {
+  const kbps = kbpsCo(h);
+  if (v.call) {
+    const call = h.peer.call(v.conn.peer, co.stream, { metadata: { kbps, co: co.id }, sdpTransform: (sdp) => ajustarSdp(sdp, kbps) });
+    v.coCalls.set(co.id, call);
+    const largar = () => { if (v.coCalls.get(co.id) === call) v.coCalls.delete(co.id); };
+    call.on('close', largar); call.on('error', largar);
+    limitarEnvio(call, kbps);
+  } else if (v.relay) {
+    const r = h.viewers.get(v.relay);
+    if (r) enviar(r, { tipo: 'repassar', para: v.conn.peer, kbps, fonte: 'co', id: co.id });
+  }
+}
+
+function encerrarCo(h, co) {
+  if (!co || h.cos.get(co.id) !== co) return;
+  h.cos.delete(co.id);
+  clearTimeout(co.t);
+  h.viewers.forEach((v) => {
+    const c = v.coCalls.get(co.id); v.coCalls.delete(co.id);
+    try { c && c.close(); } catch {}
+    enviar(v, { tipo: 'co-fim', id: co.id });
+  });
+  try { co.call && co.call.close(); } catch {}
+  co.preview.srcObject = null;
+  co.el.remove();
+  if (host === h) { atualizarQualidade(); renderCo(); }
+}
+const encerrarTodosCo = (h) => [...h.cos.values()].forEach((co) => encerrarCo(h, co));
+
+function atualizarBotaoCo() {
+  const b = $('btn-co'), lig = !!host && host.coPermitido;
+  b.querySelector('span').textContent = lig ? 'Transmissão conjunta: ligada' : 'Transmissão conjunta: desligada';
+  b.classList.toggle('desligado', !lig);
+}
+
+function renderCo() {
+  const h = host;
+  if (!h) return;
+  const ul = $('co-pedidos');
+  ul.textContent = '';
+  const pedidos = [...h.viewers.values()].filter((v) => v.coPedido);
+  pedidos.forEach((v) => {
+    const li = document.createElement('li');
+    const nome = document.createElement('span'); nome.className = 'nome'; nome.textContent = nomeDe(v) + ' quer transmitir junto';
+    const sim = document.createElement('button'); sim.className = 'btn peq primario'; sim.textContent = 'Aceitar';
+    sim.onclick = () => aceitarCo(h, v);
+    const nao = document.createElement('button'); nao.className = 'tirar'; nao.title = 'Recusar';
+    nao.innerHTML = '<svg class="ic"><use href="#i-x"/></svg>';
+    nao.onclick = () => recusarCo(h, v);
+    li.append(nome, sim, nao);
+    ul.append(li);
+  });
+  const caixa = $('co-ativos');
+  const ativos = [...h.cos.values()];
+  ativos.forEach((co) => {
+    if (co.el.parentNode !== caixa) caixa.append(co.el);
+    co.rotulo.textContent = nomeDe(co.v) + (co.stream ? ' · transmitindo junto' : ' · conectando…');
+  });
+  $('host-co').hidden = !h.coPermitido && !ativos.length;
+  $('co-titulo').textContent = `Transmissão conjunta · ${ativos.length}/${MAX_CO}`;
+  $('co-vazio').hidden = ativos.length > 0 || pedidos.length > 0;
+  // quem joga nem sempre está olhando a página: o título avisa que há pedido esperando
+  document.title = (pedidos.length ? `(${pedidos.length}) Pedido para transmitir junto · ` : '') + TITULO_PAGINA;
+}
+
 // Quantas conexões o host está de fato codificando (cada uma custa CPU/GPU, que o jogo também usa).
 function diretos(h = host) {
   let n = 0;
@@ -480,6 +636,10 @@ function removerEspectador(h, v) {
   v.removido = true;
   if (h.viewers.get(v.conn.peer) === v) h.viewers.delete(v.conn.peer);
   try { v.call && v.call.close(); } catch {}
+  v.coCalls.forEach((c) => { try { c.close(); } catch {} });
+  v.coCalls.clear();
+  encerrarCo(h, h.cos.get(v.conn.peer));
+  v.coPedido = false;
   try { v.conn.close(); } catch {}
   // quem recebia por ele precisa de outra rota: refaz a conexão (e é encaixado de novo)
   v.filhos.forEach((id) => {
@@ -487,7 +647,7 @@ function removerEspectador(h, v) {
     if (f) { f.relay = null; try { f.conn.send({ tipo: 'refazer' }); } catch {} }
   });
   if (v.relay) { const r = h.viewers.get(v.relay); if (r) r.filhos.delete(v.conn.peer); }
-  if (host === h) atualizarQualidade();
+  if (host === h) { atualizarQualidade(); renderCo(); }
 }
 
 function ligarDireto(h, v) {
@@ -519,15 +679,23 @@ function aceitarEspectador(h, conn) {
       setTimeout(() => conn.close(), 300);
       return;
     }
-    const v = { conn, nome: limparNome(conn.metadata && conn.metadata.nome), call: null, num: ++h.contador, cid, relay: null, filhos: new Set(), pronto: false, removido: false };
+    const v = { conn, nome: limparNome(conn.metadata && conn.metadata.nome), call: null, num: ++h.contador, cid, relay: null, filhos: new Set(), pronto: false, removido: false, coCalls: new Map(), coPedido: false };
     h.viewers.set(conn.peer, v);
     conn.on('close', () => removerEspectador(h, v));
     conn.on('error', () => removerEspectador(h, v));
-    conn.on('data', (m) => { if (m && m.tipo === 'nome') { v.nome = limparNome(m.nome); if (host === h) renderLista(); } });
+    conn.on('data', (m) => {
+      if (!m || host !== h) return;
+      if (m.tipo === 'nome') { v.nome = limparNome(m.nome); renderLista(); renderCo(); }
+      else if (m.tipo === 'co-pedir') pedirCo(h, v);
+      else if (m.tipo === 'co-cancelar') { v.coPedido = false; renderCo(); }
+      else if (m.tipo === 'co-parou') encerrarCo(h, h.cos.get(v.conn.peer));
+    });
 
     // até MAX_DIRETOS o host envia direto; acima disso, outro espectador repassa (poupa o PC de quem joga)
     const r = diretos(h) >= maxDiretos(h) ? escolherRepassador(h) : null;
     if (r) ligarPorRepasse(h, v, r); else ligarDireto(h, v);
+    if (h.coPermitido) enviar(v, { tipo: 'co-permitido', ok: true });
+    h.cos.forEach((co) => { if (co.stream && co.v !== v) { anunciarCo(v, co); ligarCo(h, v, co); } });
     atualizarQualidade();
   });
 }
@@ -632,7 +800,9 @@ function atualizarQualidade() {
   $('host-qtd').textContent = n;
   $('host-qualidade').textContent = p.curto;
   $('host-qualidade').title = p.rotulo;
-  const up = (p.kbps * d) / 1000; // só o que o host realmente envia (os demais recebem repassado)
+  let upKbps = p.kbps * d; // só o que o host realmente envia (os demais recebem repassado)
+  host.viewers.forEach((v) => v.coCalls.forEach((c) => { upKbps += kbpsCo(host); limitarEnvio(c, kbpsCo(host)); })); // telas dos convidados, se houver
+  const up = upKbps / 1000;
   $('host-upload').textContent = up.toFixed(1).replace('.', ',') + ' Mbps';
   $('host-upload').title = d + (d === 1 ? ' envio direto' : ' envios diretos') + (n > d ? ' · ' + (n - d) + ' por repasse' : '');
   aplicarCaptura();
@@ -807,6 +977,11 @@ function pararHost() {
   Assistente.pararCaptura();
   $('host-audio-apps').hidden = true;
   $('host-lista').textContent = '';
+  h.cos.forEach((co) => clearTimeout(co.t));
+  h.cos.clear();
+  $('co-ativos').textContent = '';
+  $('host-co').hidden = true;
+  document.title = TITULO_PAGINA;
   h.viewers.forEach((v) => { try { v.conn.send({ tipo: 'fim' }); } catch {} });
   setTimeout(() => { try { h.peer.destroy(); } catch {} }, 300);
   h.stream.getTracks().forEach((t) => t.stop());
@@ -823,6 +998,7 @@ document.addEventListener('visibilitychange', () => {
   const pv = $('preview');
   if (document.hidden) pv.srcObject = null;
   else if (!pv.srcObject) pv.srcObject = host.stream;
+  host.cos.forEach((co) => { co.preview.srcObject = document.hidden ? null : co.stream; });
 });
 
 // ---------- Quem assiste ----------
@@ -878,8 +1054,10 @@ function assistir(codigo) {
     overlay('erro', 'Este navegador não suporta transmissão ao vivo (WebRTC). Use Chrome, Edge ou Firefox atualizados.');
     return;
   }
-  const v = { codigo, peer: null, conn: null, call: null, ok: false, jaConectou: false, fim: false, aguardando: false, tentativas: 0, bytes: -1, parado: 0, vigia: null, stream: null, fila: [], filhos: new Map() };
+  const v = { codigo, peer: null, conn: null, call: null, ok: false, jaConectou: false, fim: false, aguardando: false, tentativas: 0, bytes: -1, parado: 0, vigia: null, stream: null, fila: [], filhos: new Map(),
+    filhosCo: new Map(), cos: new Map(), coPermitido: false, coEstado: 'livre', coLocal: null, coChamada: null, coAviso: '' };
   viewer = v;
+  atualizarCoUi(v);
   abrirConexao(v);
   v.vigia = setInterval(() => vigiar(v), 2000);
 }
@@ -887,6 +1065,7 @@ function assistir(codigo) {
 function encerrarViewer(v, msg, fatal) {
   if (viewer !== v) return;
   v.fim = true; v.fatal = !!fatal;
+  v.coPermitido = false; resetCo(v);
   status($('viewer-status'), 'Desconectado', 'erro');
   overlay('erro', msg);
 }
@@ -904,6 +1083,7 @@ function reconectar(v, motivo) {
   v.tentativas++;
   v.aguardando = true;
   v.stream = null; v.fila = []; v.filhos.clear();
+  v.coPermitido = false; resetCo(v); // a sala nos diz de novo se a transmissão conjunta está liberada
   status($('viewer-status'), espera ? 'Aguardando o transmissor voltar…' : `Reconectando… (${v.tentativas}/6)`, 'erro');
   overlay('carregando', espera ? 'A transmissão foi interrompida. Aguardando o transmissor voltar…' : `${motivo} Reconectando… (${v.tentativas}/6)`);
   const velho = v.peer;
@@ -941,12 +1121,21 @@ function abrirConexao(v) {
       if (m.tipo === 'via-relay' && !v.ok) overlay('carregando', 'Recebendo a imagem por repasse…');
       if (m.tipo === 'repassar') { v.fila.push(m); repassarFila(v); }
       if (m.tipo === 'refazer') reconectar(v, 'O repasse caiu.');
+      if (m.tipo === 'co-permitido') { v.coPermitido = !!m.ok; if (m.ok) atualizarCoUi(v); else resetCo(v); }
+      if (m.tipo === 'co-aceito') comecarCo(v, m.ordem);
+      if (m.tipo === 'co-recusado') pararMinha(v, m.motivo === 'ocupado' ? 'A sala já está com o máximo de telas (' + (MAX_CO + 1) + '). Tente de novo depois.' : 'O transmissor não aceitou o pedido.');
+      if (m.tipo === 'co-ativo' && m.id) atualizarTela(v, criarTela(v, String(m.id)), { nome: limparNome(m.nome) || 'Convidado', ordem: Number(m.ordem) || 99 });
+      if (m.tipo === 'co-fim' && m.id) {
+        if (v.peer && m.id === v.peer.id) pararMinha(v, 'Sua transmissão conjunta terminou.');
+        else removerTela(v, String(m.id));
+      }
     });
     conn.on('close', () => { clearTimeout(prazo); if (atual() && !v.fim) reconectar(v, 'A conexão com a sala caiu.'); });
   });
 
   peer.on('call', (call) => {
     if (!atual()) return;
+    if (call.metadata && call.metadata.co) return receberTelaCo(v, call, atual);
     v.call = call;
     const kbps = (call.metadata && call.metadata.kbps) || 1500;
     call.answer(undefined, { sdpTransform: (sdp) => ajustarSdp(sdp, kbps) }); // não envia nada de volta
@@ -998,17 +1187,171 @@ function abrirConexao(v) {
 
 // Repasse: o host pede que este espectador envie a imagem que já recebe a outro espectador.
 // Assim o PC de quem joga codifica poucas vezes, e o resto da sala é atendido pelos espectadores.
+// A tela de um convidado (transmissão conjunta, fonte 'co') segue o mesmo caminho: quem a recebe também a repassa.
 function repassarFila(v) {
-  while (v.fila.length && v.stream && v.peer) {
+  if (!v.peer) return;
+  const esperando = [];
+  while (v.fila.length) {
     const m = v.fila.shift();
+    const co = m.fonte === 'co';
+    const t = co && v.cos.get(m.id);
+    const stream = co ? t && t.stream : v.stream;
+    if (!stream) { esperando.push(m); continue; } // a imagem ainda não chegou: atende quando chegar
     const kbps = Math.min(m.kbps || 1500, 3500);
-    const c = v.peer.call(m.para, v.stream, { metadata: { kbps }, sdpTransform: (sdp) => ajustarSdp(sdp, kbps) });
-    v.filhos.set(m.para, c);
-    const largar = () => v.filhos.delete(m.para);
+    const c = v.peer.call(m.para, stream, { metadata: co ? { kbps, co: m.id } : { kbps }, sdpTransform: (sdp) => ajustarSdp(sdp, kbps) });
+    const mapa = co ? v.filhosCo : v.filhos;
+    const chave = co ? m.id + '|' + m.para : m.para;
+    mapa.set(chave, c);
+    const largar = () => { if (mapa.get(chave) === c) mapa.delete(chave); };
     c.on('close', largar); c.on('error', largar);
     limitarEnvio(c, kbps);
   }
+  v.fila.push(...esperando);
 }
+
+// ---- Transmissão conjunta (lado de quem assiste) ----
+// v.cos guarda as telas extras: id do convidado → { nome, ordem, stream, entrada, el, video, rotulo }.
+// A minha própria tela, quando eu transmito, entra com o meu id e também serve de origem para quem eu repasso.
+function criarTela(v, id) {
+  let t = v.cos.get(id);
+  if (t) return t;
+  const el = document.createElement('div'); el.className = 'tela-co';
+  const video = document.createElement('video'); video.muted = true; video.autoplay = true; video.playsInline = true;
+  const rotulo = document.createElement('span'); rotulo.className = 'rotulo-co';
+  el.append(video, rotulo);
+  $('telas').append(el);
+  t = { id, nome: 'Convidado', ordem: 99, stream: null, entrada: null, el, video, rotulo };
+  v.cos.set(id, t);
+  organizarTelas(v);
+  return t;
+}
+
+function atualizarTela(v, t, dados) {
+  Object.assign(t, dados);
+  t.rotulo.textContent = t.nome;
+  if (t.stream && t.video.srcObject !== t.stream) { t.video.srcObject = t.stream; t.video.play().catch(() => {}); }
+  organizarTelas(v);
+}
+
+function removerTela(v, id) {
+  const t = v.cos.get(id);
+  if (!t) return;
+  v.cos.delete(id);
+  const e = t.entrada; t.entrada = null;
+  try { e && e.close(); } catch {}
+  v.filhosCo.forEach((c, k) => { if (k.startsWith(id + '|')) { try { c.close(); } catch {} v.filhosCo.delete(k); } });
+  v.fila = v.fila.filter((m) => !(m.fonte === 'co' && m.id === id));
+  t.video.srcObject = null;
+  t.el.remove();
+  organizarTelas(v);
+}
+
+// Grade automática: 1 tela ocupa tudo, 2 ficam lado a lado, 3 e 4 formam duas linhas (a terceira, sozinha, centraliza).
+function organizarTelas(v) {
+  if (viewer !== v) return;
+  const ts = [...v.cos.values()].sort((a, b) => a.ordem - b.ordem);
+  const n = 1 + ts.length;
+  $('player').classList.toggle('dividido', n > 1);
+  $('telas').style.setProperty('--linhas', n > 2 ? 2 : 1);
+  ts.forEach((t, i) => {
+    t.el.style.order = i + 1; // a principal fica sempre em primeiro (order 0)
+    t.el.style.gridColumn = n === 3 && i === ts.length - 1 ? '1 / -1' : '';
+  });
+}
+
+function atualizarCoUi(v) {
+  const b = $('btn-co-pedir'), est = v.coEstado;
+  const podeCapturar = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+  b.hidden = !podeCapturar || !(v.coPermitido || est !== 'livre');
+  b.disabled = est === 'escolhendo';
+  b.classList.toggle('perigo', est === 'transmitindo');
+  b.querySelector('span').textContent = est === 'transmitindo' ? 'Parar minha transmissão' : est === 'aguardando' ? 'Cancelar pedido' : 'Transmitir junto';
+  $('co-msg').textContent = est === 'aguardando' ? 'Aguardando o transmissor aprovar…' : est === 'transmitindo' ? 'Sua tela está na sala.' : v.coAviso;
+}
+
+// Para só a minha transmissão: solta a captura e a chamada e tira a minha tela da grade.
+function pararMinha(v, aviso = '') {
+  const local = v.coLocal, saida = v.coChamada, meu = v.peer && v.peer.id;
+  v.coLocal = null; v.coChamada = null; v.coEstado = 'livre'; v.coAviso = aviso;
+  if (local) local.getTracks().forEach((t) => { t.onended = null; t.stop(); });
+  try { saida && saida.close(); } catch {}
+  if (meu) removerTela(v, meu);
+  atualizarCoUi(v);
+}
+
+// Volta ao estado normal: minha transmissão, todas as telas extras e o que eu repassava (mantém a permissão da sala).
+function resetCo(v, aviso = '') {
+  pararMinha(v, aviso);
+  [...v.cos.keys()].forEach((id) => removerTela(v, id));
+  v.filhosCo.forEach((c) => { try { c.close(); } catch {} });
+  v.filhosCo.clear();
+  v.fila = v.fila.filter((m) => m.fonte !== 'co');
+  organizarTelas(v);
+}
+
+function pararCo(v) {
+  if (v.coEstado === 'livre') return;
+  try { v.conn && v.conn.open && v.conn.send({ tipo: v.coEstado === 'transmitindo' ? 'co-parou' : 'co-cancelar' }); } catch {}
+  pararMinha(v);
+}
+
+async function capturarTelaCo() {
+  try {
+    return await navigator.mediaDevices.getDisplayMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+      audio: false,
+      selfBrowserSurface: 'exclude', // não oferece esta própria página (a imagem se repetiria infinitamente)
+    });
+  } catch (e) {
+    if (e.name !== 'NotAllowedError') alert('Não foi possível capturar a tela: ' + e.message);
+    return null;
+  }
+}
+
+// O pedido sai depois de escolher a tela (o navegador exige um clique para abrir o seletor).
+async function pedirTransmitirJunto(v) {
+  if (v.coEstado !== 'livre') return pararCo(v);
+  v.coEstado = 'escolhendo'; v.coAviso = '';
+  atualizarCoUi(v);
+  const s = await capturarTelaCo();
+  if (viewer !== v || v.coEstado !== 'escolhendo') { if (s) s.getTracks().forEach((t) => t.stop()); return; }
+  if (!s) return pararMinha(v);
+  if (!v.conn || !v.conn.open) { s.getTracks().forEach((t) => t.stop()); return pararMinha(v, 'Sem conexão com a sala. Tente de novo.'); }
+  v.coLocal = s;
+  s.getVideoTracks()[0].onended = () => pararCo(v); // botão "Parar compartilhamento" do navegador
+  v.coEstado = 'aguardando';
+  v.conn.send({ tipo: 'co-pedir' });
+  atualizarCoUi(v);
+}
+
+// O transmissor aceitou: envia a minha tela para a sala e mostra a própria imagem na grade.
+function comecarCo(v, ordem) {
+  if (v.coEstado !== 'aguardando' || !v.coLocal || !v.peer) return;
+  v.coEstado = 'transmitindo';
+  atualizarTela(v, criarTela(v, v.peer.id), { nome: 'Você', ordem: ordem || 99, stream: v.coLocal });
+  const call = v.peer.call(PREFIXO_ID + v.codigo, v.coLocal, { metadata: { co: true }, sdpTransform: (sdp) => ajustarSdp(sdp, 2000) });
+  v.coChamada = call;
+  limitarEnvio(call, 2000);
+  const caiu = () => { if (v.coChamada === call) { pararCo(v); v.coAviso = 'A transmissão conjunta caiu.'; atualizarCoUi(v); } };
+  call.on('close', caiu); call.on('error', caiu);
+  atualizarCoUi(v);
+  repassarFila(v);
+}
+
+// Tela de um convidado vinda da sala (do host ou de quem me repassa).
+function receberTelaCo(v, call, atual) {
+  const id = String(call.metadata.co);
+  call.answer(undefined, { sdpTransform: (sdp) => ajustarSdp(sdp, (call.metadata && call.metadata.kbps) || 1000) });
+  const t = criarTela(v, id);
+  t.entrada = call;
+  call.on('stream', (stream) => {
+    if (!atual() || t.entrada !== call || t.stream === stream) return;
+    atualizarTela(v, t, { stream });
+    repassarFila(v);
+  });
+  call.on('close', () => { if (atual() && t.entrada === call && v.cos.get(id) === t) { t.entrada = null; removerTela(v, id); } });
+}
+
 function limitarEnvio(call, kbps, tentativas = 0) {
   const pc = call.peerConnection;
   if (!pc || pc.connectionState !== 'connected') { if (tentativas < 60) setTimeout(() => limitarEnvio(call, kbps, tentativas + 1), 250); return; }
@@ -1049,6 +1392,8 @@ function sairViewer() {
   if (!viewer) return;
   viewer.fim = true;
   clearInterval(viewer.vigia);
+  if (viewer.coEstado !== 'livre') try { viewer.conn && viewer.conn.open && viewer.conn.send({ tipo: 'co-parou' }); } catch {}
+  viewer.coPermitido = false; resetCo(viewer);
   try { viewer.peer && viewer.peer.destroy(); } catch {}
   viewer = null;
   $('remoto').srcObject = null;
@@ -1074,6 +1419,7 @@ $('btn-repasse').onclick = () => {
   salvarEscolha(); atualizarBotaoRepasse();
 };
 atualizarBotaoRepasse();
+$('btn-co').onclick = () => { if (host) definirCoPermitido(!host.coPermitido); };
 function atualizarBotaoAuto() {
   const b = $('btn-auto'), lig = escolha.auto !== false;
   b.querySelector('span').textContent = lig ? 'Ajuste automático: ligado' : 'Ajuste automático: desligado';
@@ -1138,6 +1484,7 @@ campoNome.addEventListener('input', () => {
 $('btn-voltar').onclick = sairViewer;
 $('btn-tentar').onclick = () => { if (viewer) { const c = viewer.codigo; sairViewer(); assistir(c); } };
 $('btn-sair-vista').onclick = sairViewer;
+$('btn-co-pedir').onclick = () => { if (viewer) pedirTransmitirJunto(viewer); };
 
 // ---------- Player: som, modos de exibição, ajuste e tamanho ----------
 const prefs = { vol: 1, fit: 'contain', tam: '100' };

@@ -22,6 +22,20 @@ Site estático: basta servir esta pasta por HTTPS (por exemplo, GitHub Pages). O
 - `vendor/peerjs.min.js`: PeerJS 1.5.4 (sinalização via PeerJS Cloud público)
 - `sw.js`, `manifest.webmanifest`, `icons/`: PWA
 
+## Transmissão conjunta (tela dividida)
+
+Quem transmite pode deixar **até 3 espectadores** transmitirem a própria tela junto. A sala vê **até 4 telas** (a do host e as dos convidados):
+
+- Fica desligada por padrão. O host liga em **Transmissão conjunta** na tela da transmissão (não existe na tela inicial); só então os
+  espectadores veem o botão **Transmitir junto**.
+- O espectador escolhe a tela no navegador e o pedido chega ao host, que **aceita ou recusa** (o título da aba mostra "(1) Pedido…").
+  O host vê uma prévia de cada convidado e pode **Parar** qualquer um a qualquer momento; o convidado também pode parar.
+- A imagem de cada convidado chega ao host e segue para a sala como uma chamada extra, pelos mesmos caminhos da principal (direto ou por
+  repasse). Quem assiste monta a grade (1 tela cheia, 2 lado a lado, 3 e 4 em duas linhas); o host não compõe nada. Cada espectador direto
+  custa uma codificação extra no host por convidado (o bitrate de cada tela cai conforme o número de telas).
+- Só vídeo: o áudio do convidado não é enviado (voltaria a ser capturado por quem usa "todo o áudio" e causaria eco).
+- Os convidados contam entre os 10 espectadores da sala.
+
 ## Assistente de áudio (opcional, só Windows)
 
 Por padrão a transmissão envia **todo o áudio** do sistema (ou da aba), como qualquer site faz. O navegador não

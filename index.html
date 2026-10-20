@@ -101,7 +101,8 @@
         "Até 10 espectadores por sala",
         "Conexão direta entre navegadores (WebRTC)",
         "Sem cadastro e sem instalação",
-        "Modo cinema, tela cheia e janela flutuante para quem assiste"
+        "Modo cinema, tela cheia e janela flutuante para quem assiste",
+        "Transmissão conjunta: até 4 telas lado a lado na mesma sala, com aprovação de quem criou a transmissão"
       ]
     },
     {
@@ -178,6 +179,14 @@
           "acceptedAnswer": {
             "@type": "Answer",
             "text": "Assistir funciona. Transmitir a tela depende do navegador do aparelho, e a maioria dos celulares não oferece essa função."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Posso transmitir a tela junto com outras pessoas?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sim. Quem criou a transmissão liga a transmissão conjunta e aprova cada pedido. Até 3 espectadores podem transmitir a própria tela, e a sala vê até 4 telas lado a lado, em grade automática."
           }
         }
       ]
@@ -431,6 +440,7 @@
                   <div class="host-botoes">
                     <button id="btn-trocar" class="btn" title="Escolher outra tela, janela ou aba sem encerrar a transmissão"><svg class="ic"><use href="#i-swap"/></svg>Trocar tela / janela</button>
                     <button id="btn-repasse" class="btn" title="Com mais de 3 espectadores, os demais recebem a imagem repassada por outro espectador. Seu PC codifica menos vezes e o FPS do jogo sofre menos."><svg class="ic"><use href="#i-users"/></svg><span>Repasse entre espectadores: ligado</span></button>
+                    <button id="btn-co" class="btn desligado" title="Permite que até 3 espectadores (cada um aprovado por você) transmitam a tela deles junto com a sua, em tela dividida de até 4 telas. Desligado, ninguém vê essa opção."><svg class="ic"><use href="#i-share"/></svg><span>Transmissão conjunta: desligada</span></button>
                     <button id="btn-auto" class="btn" title="Reduz a qualidade sozinho quando a internet piora e volta ao que você escolheu quando estabiliza"><svg class="ic"><use href="#i-zap"/></svg><span>Ajuste automático: ligado</span></button>
                     <button id="btn-audio-host" class="btn" title="Liga ou desliga o áudio enviado"><svg class="ic"><use href="#i-volume"/></svg><span>Áudio ligado</span></button>
                     <button id="btn-parar" class="btn perigo"><svg class="ic"><use href="#i-stop"/></svg>Encerrar</button>
@@ -458,6 +468,13 @@
                   <div class="stat"><svg class="ic"><use href="#i-gauge"/></svg><b id="host-qualidade">—</b><small>qualidade</small></div>
                 </div>
 
+                <div class="cartao co-card" id="host-co" hidden>
+                  <h3 id="co-titulo">Transmissão conjunta</h3>
+                  <ul id="co-pedidos" class="lista"></ul>
+                  <div class="co-ativos" id="co-ativos"></div>
+                  <p class="vazio" id="co-vazio">Aberta a pedidos. Quando um espectador pedir para transmitir junto, ele aparece aqui para você aceitar ou recusar. Cada tela extra aumenta o seu upload.</p>
+                </div>
+
                 <div class="cartao lista-box">
                   <h3>Espectadores</h3>
                   <ul id="host-lista" class="lista"></ul>
@@ -477,7 +494,12 @@
 
             <div class="palco" id="palco">
               <div class="player" id="player">
-                <video id="remoto" playsinline autoplay></video>
+                <div class="telas" id="telas">
+                  <div class="tela-co" id="tela-principal">
+                    <video id="remoto" playsinline autoplay></video>
+                    <span class="rotulo-co">Transmissor</span>
+                  </div>
+                </div>
                 <div class="overlay" id="overlay">
                   <div class="carregando" id="carregando"><span class="anel"></span></div>
                   <svg class="ic grande-ic" id="ic-aviso" hidden><use href="#i-alert"/></svg>
@@ -527,6 +549,8 @@
                 </div>
                 <div class="vrodape">
                   <label class="nome-linha"><svg class="ic"><use href="#i-users"/></svg><input type="text" id="viewer-nome" class="campo-nome" maxlength="24" placeholder="Seu nome (opcional)" title="Seu nome aparece na lista de quem transmite" autocomplete="nickname" aria-label="Seu nome, visível para quem transmite"></label>
+                  <button id="btn-co-pedir" class="btn peq" hidden title="Mostra a sua tela ao lado da de quem transmite. O transmissor precisa aprovar."><svg class="ic"><use href="#i-share"/></svg><span>Transmitir junto</span></button>
+                  <span class="co-msg" id="co-msg"></span>
                   <button id="btn-sair-vista" class="btn peq perigo sair-vista" title="Sair da sala"><svg class="ic"><use href="#i-exit"/></svg>Sair da sala</button>
                 </div>
               </div>
@@ -636,6 +660,7 @@
           <button role="tab" data-aba="audio" aria-selected="false"><svg class="ic"><use href="#i-volume"/></svg><span>Áudio<small>Do sistema ou da aba</small></span></button>
           <button role="tab" data-aba="player" aria-selected="false"><svg class="ic"><use href="#i-cinema"/></svg><span>Player<small>Cinema, tela cheia, flutuar</small></span></button>
           <button role="tab" data-aba="sala" aria-selected="false"><svg class="ic"><use href="#i-users"/></svg><span>Sala<small>Código, link e espectadores</small></span></button>
+          <button role="tab" data-aba="conjunta" aria-selected="false"><svg class="ic"><use href="#i-window"/></svg><span>Tela dividida<small>Até 4 pessoas transmitindo juntas</small></span></button>
           <button role="tab" data-aba="privacidade" aria-selected="false"><svg class="ic"><use href="#i-lock"/></svg><span>Privacidade<small>Sem servidor de vídeo</small></span></button>
         </div>
         <div class="v2-abas-painel">
@@ -660,6 +685,12 @@
             <h3>Uma sala fácil de gerenciar</h3>
             <p>Cada transmissão tem um código de 6 caracteres e um link pronto para copiar. Veja quem está conectado, acompanhe o upload em uso e remova espectadores a qualquer momento.</p>
             <div class="v2-chips"><span>Até 10 espectadores</span><span>Link com um clique</span><span>Remoção de espectadores</span></div>
+          </article>
+          <article data-painel="conjunta">
+            <h3>Transmitam juntos, em tela dividida</h3>
+            <p>Quem criou a transmissão pode deixar espectadores mostrarem a própria tela na mesma sala. Cada pessoa pede para entrar, o transmissor aprova (ou recusa) e todos passam a ver as telas lado a lado, com o nome de quem transmite cada uma.</p>
+            <div class="v2-chips"><span>Até 4 telas</span><span>Você aprova cada pessoa</span><span>Grade automática</span><span>Pode parar a qualquer momento</span></div>
+            <p class="v2-mut">Fica desligado até o transmissor ativar, na tela da transmissão. Só vídeo, sem o áudio dos convidados. Cada tela extra aumenta o upload de quem criou a sala.</p>
           </article>
           <article data-painel="privacidade">
             <h3>Privado por construção</h3>
@@ -708,9 +739,10 @@
         <details><summary>Preciso criar conta ou instalar algo?</summary><p>Não. Basta abrir o site. A instalação como aplicativo é opcional.</p></details>
         <details><summary>O áudio do computador é transmitido?</summary><p>Sim, ao compartilhar a tela inteira ou uma aba e marcar a opção de áudio. Ao compartilhar uma janela específica, o navegador não envia som.</p></details>
         <details><summary>Qual resolução e fps devo escolher?</summary><p>720p a 30 fps é o equilíbrio ideal. Use 1080p ou 60 fps apenas com bom upload e poucos espectadores. A calculadora acima ajuda a estimar.</p></details>
-        <details><summary>Quantas pessoas podem assistir?</summary><p>Até 10. A qualidade é reduzida automaticamente quando a sala enche, para não sobrecarregar a conexão de quem transmite.</p></details>
+        <details><summary>Quantas pessoas podem assistir?</summary><p>Até 10 pessoas na sala, incluindo quem transmite junto. A qualidade é reduzida automaticamente quando a sala enche, para não sobrecarregar a conexão de quem transmite.</p></details>
         <details><summary>Alguém consegue ver minha tela sem eu saber?</summary><p>Não. O navegador sempre pergunta o que será compartilhado e exibe um aviso durante a transmissão. Só entra quem tem o código da sala.</p></details>
         <details><summary>Não conecta para algumas pessoas. Por quê?</summary><p>Algumas redes (corporativas ou de celular com restrições) bloqueiam a conexão direta. Tentar por outra rede costuma resolver.</p></details>
+        <details><summary>Posso transmitir a tela junto com outras pessoas?</summary><p>Sim. Na tela da transmissão, ligue <b>Transmissão conjunta</b>. Os espectadores passam a ver o botão <b>Transmitir junto</b>; cada pedido chega para você aceitar ou recusar. Até 3 pessoas podem transmitir ao mesmo tempo, e a sala vê até 4 telas lado a lado (a sua e as delas). Você pode parar qualquer convidado quando quiser.</p></details>
         <details><summary>Funciona no celular?</summary><p>Assistir funciona. Transmitir a tela depende do navegador do aparelho, e a maioria dos celulares não oferece essa função.</p></details>
       </div>
     </section>

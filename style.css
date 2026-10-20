@@ -521,7 +521,7 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
 .apps-acoes { display: flex; flex-wrap: wrap; gap: 10px; }
 .apps-baixar[hidden], .apps-baixar ol[hidden] { display: none; }
 
-.vrodape { flex: 1 0 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 12px; border-top: 1px solid var(--borda); }
+.vrodape { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; padding-top: 12px; border-top: 1px solid var(--borda); }
 .nome-linha { display: flex; align-items: center; gap: 8px; flex: 1; max-width: 380px; color: var(--mut); }
 .campo-nome { flex: 1; min-width: 0; width: 100%; padding: 8px 12px; font-size: .86rem; }
 .campo-nome:focus { outline: none; border-color: var(--em2); }
@@ -541,3 +541,23 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
 .retomar[hidden] { display: none; }
 .retomar b { color: var(--em2); letter-spacing: .15em; }
 .retomar-acoes { display: flex; gap: 8px; }
+
+/* Transmissão conjunta: grade de telas no mesmo player (1 tela, 2 lado a lado, 3 e 4 em duas linhas) */
+.telas { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.player.dividido .telas { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(var(--linhas, 1), minmax(0, 1fr)); gap: 2px; background: var(--borda-forte); }
+.tela-co { position: relative; min-width: 0; min-height: 0; background: #000; }
+.rotulo-co { position: absolute; left: 10px; top: 10px; z-index: 2; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 10px; border-radius: 999px; font-size: .74rem; font-weight: 600; color: #fff; background: rgba(0,0,0,.55); border: 1px solid var(--borda-forte); }
+.rotulo-co:empty, .player:not(.dividido) .rotulo-co { display: none; }
+.co-msg { font-size: .8rem; color: var(--mut); }
+.co-msg:empty { display: none; }
+#btn-co.desligado { color: var(--mut); }
+.co-card[hidden] { display: none; }
+.co-card h3 { font-size: .9rem; margin-bottom: 10px; }
+.co-card .lista:empty { display: none; }
+.co-card .lista { margin-bottom: 10px; }
+.co-card .lista li .btn { flex: none; }
+.co-ativos { display: flex; flex-direction: column; gap: 12px; }
+.co-ativo { display: flex; flex-direction: column; gap: 8px; }
+.co-ativo video { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #000; border-radius: var(--r-md); border: 1px solid var(--borda); }
+.co-ativo-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .88rem; }
+.player.dividido #badge-res { display: none; }
