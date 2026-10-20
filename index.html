@@ -3,6 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-63S8B2FZT5"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    // page_location sem a query (?sala=CODIGO): o código da sala nunca vai para o Google Analytics
+    gtag('config', 'G-63S8B2FZT5', { page_location: location.origin + location.pathname });
+  </script>
   <title>Compartilhar Tela Online com Áudio — Grátis, sem Instalar</title>
   <meta name="description" content="Compartilhe a tela do computador com áudio em tempo real, direto no navegador. Grátis, sem cadastro e sem instalar. Até 10 espectadores, 1080p e 60 fps.">
   <meta name="keywords" content="compartilhar tela, compartilhar tela online, compartilhar tela com áudio, transmitir tela, compartilhamento de tela grátis, compartilhar tela sem instalar, compartilhar tela navegador, WebRTC">
