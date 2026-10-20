@@ -113,7 +113,7 @@ function mostrar(id) {
   if (id !== 'tela-viewer') sairModos();
   if (id !== 'tela-inicio') window.scrollTo({ top: 0 });
 }
-function status(el, texto, tipo = '') { el.textContent = texto; el.className = 'status ' + tipo; }
+function status(el, texto, tipo = '') { el.textContent = texto; el.title = texto; el.className = 'status ' + tipo; }
 function novoCodigo() {
   const b = crypto.getRandomValues(new Uint8Array(6));
   return Array.from(b, (x) => ALFABETO[x % ALFABETO.length]).join('');
@@ -487,6 +487,9 @@ function definirCoPermitido(on) {
 function pedirCo(h, v) {
   if (!h.coPermitido) return enviar(v, { tipo: 'co-recusado', motivo: 'desligado' });
   if (h.cos.has(v.conn.peer) || cheioCo(h)) return enviar(v, { tipo: 'co-recusado', motivo: 'ocupado' });
+  const agora = Date.now();
+  if (agora < (v.coBloqueio || 0)) return enviar(v, { tipo: 'co-recusado', motivo: 'espera' }); // evita enxurrada de pedidos
+  v.coBloqueio = agora + 2000;
   v.coPedido = true;
   renderCo();
 }
@@ -499,6 +502,9 @@ function aceitarCo(h, v) {
   // se a chamada dele não chegar logo, desiste e libera a vaga
   co.t = setTimeout(() => { if (!co.stream) encerrarCo(h, co); }, 20000);
   h.cos.set(co.id, co);
+  // quem recebia a imagem por ele refaz a conexão e é encaixado em outro repassador (ou no host)
+  v.filhos.forEach((id) => { const f = h.viewers.get(id); if (f) { f.relay = null; enviar(f, { tipo: 'refazer' }); } });
+  v.filhos.clear();
   enviar(v, { tipo: 'co-aceito', ordem: co.ordem });
   // com as vagas esgotadas, quem estava na fila precisa pedir de novo depois
   if (cheioCo(h)) h.viewers.forEach((o) => { if (o.coPedido) { o.coPedido = false; enviar(o, { tipo: 'co-recusado', motivo: 'ocupado' }); } });
@@ -507,6 +513,7 @@ function aceitarCo(h, v) {
 
 function recusarCo(h, v) {
   v.coPedido = false;
+  v.coBloqueio = Date.now() + 30000; // quem foi recusado espera um pouco antes de pedir de novo
   enviar(v, { tipo: 'co-recusado', motivo: 'recusado' });
   renderCo();
 }
@@ -530,7 +537,7 @@ function receberCo(h, call) {
   const co = h.cos.get(call.peer);
   if (host !== h || !co || co.call || !call.metadata || !call.metadata.co) return call.close();
   co.call = call;
-  call.answer(undefined, { sdpTransform: (sdp) => ajustarSdp(sdp, 2000) });
+  call.answer(undefined, { sdpTransform: (sdp) => ajustarSdp(sdp, 1500) });
   call.on('stream', (stream) => {
     if (h.cos.get(co.id) !== co || co.stream === stream) return;
     clearTimeout(co.t);
@@ -547,18 +554,40 @@ function receberCo(h, call) {
 function anunciarCo(v, co) { enviar(v, { tipo: 'co-ativo', id: co.id, nome: nomeDe(co.v), ordem: co.ordem }); }
 
 // Entrega a tela de um convidado a um espectador: direto do host, ou pelo mesmo repassador que ele já usa.
+// Cada tela de convidado ocupa só uma fração do player: resolução, fps e bitrate menores que os da principal poupam o PC de quem joga
+// (o host recodifica cada tela para cada espectador direto). A altura de origem é medida em medirTelasCo.
+function paramsCo(h, co) {
+  const p = perfil(diretos(h));
+  const grande = h.cos.size >= 3;
+  return { kbps: kbpsCo(h), fps: Math.min(grande ? 20 : 24, p.fps), escala: Math.max(1, (co.altura || 720) / (grande ? 360 : 540)) * p.escala };
+}
+
 function ligarCo(h, v, co) {
-  const kbps = kbpsCo(h);
+  const pr = paramsCo(h, co);
   if (v.call) {
-    const call = h.peer.call(v.conn.peer, co.stream, { metadata: { kbps, co: co.id }, sdpTransform: (sdp) => ajustarSdp(sdp, kbps) });
+    const call = h.peer.call(v.conn.peer, co.stream, { metadata: { kbps: pr.kbps, co: co.id }, sdpTransform: (sdp) => ajustarSdp(sdp, pr.kbps) });
     v.coCalls.set(co.id, call);
     const largar = () => { if (v.coCalls.get(co.id) === call) v.coCalls.delete(co.id); };
     call.on('close', largar); call.on('error', largar);
-    limitarEnvio(call, kbps);
+    limitarEnvio(call, pr.kbps, { fps: pr.fps, escala: pr.escala });
   } else if (v.relay) {
     const r = h.viewers.get(v.relay);
-    if (r) enviar(r, { tipo: 'repassar', para: v.conn.peer, kbps, fonte: 'co', id: co.id });
+    if (r) enviar(r, { tipo: 'repassar', para: v.conn.peer, kbps: pr.kbps, fps: pr.fps, fonte: 'co', id: co.id }); // já chega reduzida: o repassador só limita fps/bitrate
   }
+}
+
+// Mede a altura real da imagem que cada convidado envia (a captura dele pode vir maior que o pedido) e reaplica os limites se mudou.
+async function medirTelasCo(h) {
+  let mudou = false;
+  await Promise.all([...h.cos.values()].map(async (co) => {
+    const pc = co.call && co.call.peerConnection;
+    if (!pc || pc.connectionState !== 'connected') return;
+    try {
+      const st = await pc.getStats();
+      st.forEach((r) => { if (r.type === 'inbound-rtp' && r.kind === 'video' && r.frameHeight && r.frameHeight !== co.altura) { co.altura = r.frameHeight; mudou = true; } });
+    } catch {}
+  }));
+  if (mudou && host === h) atualizarQualidade();
 }
 
 function encerrarCo(h, co) {
@@ -625,7 +654,7 @@ const maxDiretos = (h) => (h.repasse === false ? MAX_ESPECTADORES : MAX_DIRETOS)
 function escolherRepassador(h) {
   let melhor = null;
   h.viewers.forEach((v) => {
-    if (!v.call || !v.pronto || v.filhos.size >= MAX_FILHOS) return;
+    if (!v.call || !v.pronto || v.filhos.size >= MAX_FILHOS || v.coPedido || h.cos.has(v.conn.peer)) return; // quem transmite junto já gasta CPU/GPU com a captura
     if (!melhor || v.filhos.size < melhor.filhos.size) melhor = v;
   });
   return melhor;
@@ -766,8 +795,14 @@ async function monitorarRede() {
   const h = host;
   if (!h) return;
   if (escolha.auto === false) { if (h.nivel) { h.nivel = 0; atualizarQualidade(); } mostrarRede(); return; }
-  const vs = [...h.viewers.values()].filter((v) => v.call);
-  const brutas = await Promise.all(vs.map((v) => medirEspectador(v.call)));
+  if (h.cos.size) medirTelasCo(h);
+  const principais = [...h.viewers.values()].filter((v) => v.call);
+  const extras = [...h.viewers.values()].flatMap((v) => [...v.coCalls.values()]);
+  // nas chamadas extras vale perda, atraso e CPU; a banda estimada delas é pequena de propósito e não conta
+  const brutas = await Promise.all([
+    ...principais.map((v) => medirEspectador(v.call)),
+    ...extras.map((c) => medirEspectador(c).then((m) => m && { ...m, disp: 0 })),
+  ]);
   const medidas = brutas.filter(Boolean);
   if (host !== h || !medidas.length) { mostrarRede(); return; }
 
@@ -801,7 +836,13 @@ function atualizarQualidade() {
   $('host-qualidade').textContent = p.curto;
   $('host-qualidade').title = p.rotulo;
   let upKbps = p.kbps * d; // só o que o host realmente envia (os demais recebem repassado)
-  host.viewers.forEach((v) => v.coCalls.forEach((c) => { upKbps += kbpsCo(host); limitarEnvio(c, kbpsCo(host)); })); // telas dos convidados, se houver
+  host.viewers.forEach((v) => v.coCalls.forEach((c, id) => { // telas dos convidados, se houver
+    const co = host.cos.get(id);
+    if (!co) return;
+    const pr = paramsCo(host, co);
+    upKbps += pr.kbps;
+    limitarEnvio(c, pr.kbps, { fps: pr.fps, escala: pr.escala });
+  }));
   const up = upKbps / 1000;
   $('host-upload').textContent = up.toFixed(1).replace('.', ',') + ' Mbps';
   $('host-upload').title = d + (d === 1 ? ' envio direto' : ' envios diretos') + (n > d ? ' · ' + (n - d) + ' por repasse' : '');
@@ -1123,8 +1164,8 @@ function abrirConexao(v) {
       if (m.tipo === 'refazer') reconectar(v, 'O repasse caiu.');
       if (m.tipo === 'co-permitido') { v.coPermitido = !!m.ok; if (m.ok) atualizarCoUi(v); else resetCo(v); }
       if (m.tipo === 'co-aceito') comecarCo(v, m.ordem);
-      if (m.tipo === 'co-recusado') pararMinha(v, m.motivo === 'ocupado' ? 'A sala já está com o máximo de telas (' + (MAX_CO + 1) + '). Tente de novo depois.' : 'O transmissor não aceitou o pedido.');
-      if (m.tipo === 'co-ativo' && m.id) atualizarTela(v, criarTela(v, String(m.id)), { nome: limparNome(m.nome) || 'Convidado', ordem: Number(m.ordem) || 99 });
+      if (m.tipo === 'co-recusado') pararMinha(v, m.motivo === 'ocupado' ? 'A sala já está com o máximo de telas (' + (MAX_CO + 1) + '). Tente de novo depois.' : m.motivo === 'espera' ? 'Aguarde um pouco antes de pedir de novo.' : 'O transmissor não aceitou o pedido.');
+      if (m.tipo === 'co-ativo' && m.id) { const t = criarTela(v, String(m.id)); if (t) atualizarTela(v, t, { nome: limparNome(m.nome) || 'Convidado', ordem: Number(m.ordem) || 99 }); }
       if (m.tipo === 'co-fim' && m.id) {
         if (v.peer && m.id === v.peer.id) pararMinha(v, 'Sua transmissão conjunta terminou.');
         else removerTela(v, String(m.id));
@@ -1204,7 +1245,7 @@ function repassarFila(v) {
     mapa.set(chave, c);
     const largar = () => { if (mapa.get(chave) === c) mapa.delete(chave); };
     c.on('close', largar); c.on('error', largar);
-    limitarEnvio(c, kbps);
+    limitarEnvio(c, kbps, co && m.fps ? { fps: Math.min(Number(m.fps) || 24, 30) } : {});
   }
   v.fila.push(...esperando);
 }
@@ -1215,6 +1256,7 @@ function repassarFila(v) {
 function criarTela(v, id) {
   let t = v.cos.get(id);
   if (t) return t;
+  if (!/^[\w-]{1,80}$/.test(id) || v.cos.size >= MAX_CO) return null; // no máximo MAX_CO telas extras, com id de formato válido
   const el = document.createElement('div'); el.className = 'tela-co';
   const video = document.createElement('video'); video.muted = true; video.autoplay = true; video.playsInline = true;
   const rotulo = document.createElement('span'); rotulo.className = 'rotulo-co';
@@ -1298,7 +1340,7 @@ function pararCo(v) {
 async function capturarTelaCo() {
   try {
     return await navigator.mediaDevices.getDisplayMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 24 } },
       audio: false,
       selfBrowserSurface: 'exclude', // não oferece esta própria página (a imagem se repetiria infinitamente)
     });
@@ -1328,10 +1370,12 @@ async function pedirTransmitirJunto(v) {
 function comecarCo(v, ordem) {
   if (v.coEstado !== 'aguardando' || !v.coLocal || !v.peer) return;
   v.coEstado = 'transmitindo';
-  atualizarTela(v, criarTela(v, v.peer.id), { nome: 'Você', ordem: ordem || 99, stream: v.coLocal });
-  const call = v.peer.call(PREFIXO_ID + v.codigo, v.coLocal, { metadata: { co: true }, sdpTransform: (sdp) => ajustarSdp(sdp, 2000) });
+  const minha = criarTela(v, v.peer.id);
+  if (!minha) return pararCo(v);
+  atualizarTela(v, minha, { nome: 'Você', ordem: ordem || 99, stream: v.coLocal });
+  const call = v.peer.call(PREFIXO_ID + v.codigo, v.coLocal, { metadata: { co: true }, sdpTransform: (sdp) => ajustarSdp(sdp, 1500) });
   v.coChamada = call;
-  limitarEnvio(call, 2000);
+  limitarEnvio(call, 1500, { fps: 24 });
   const caiu = () => { if (v.coChamada === call) { pararCo(v); v.coAviso = 'A transmissão conjunta caiu.'; atualizarCoUi(v); } };
   call.on('close', caiu); call.on('error', caiu);
   atualizarCoUi(v);
@@ -1343,6 +1387,7 @@ function receberTelaCo(v, call, atual) {
   const id = String(call.metadata.co);
   call.answer(undefined, { sdpTransform: (sdp) => ajustarSdp(sdp, (call.metadata && call.metadata.kbps) || 1000) });
   const t = criarTela(v, id);
+  if (!t) return call.close();
   t.entrada = call;
   call.on('stream', (stream) => {
     if (!atual() || t.entrada !== call || t.stream === stream) return;
@@ -1352,16 +1397,35 @@ function receberTelaCo(v, call, atual) {
   call.on('close', () => { if (atual() && t.entrada === call && v.cos.get(id) === t) { t.entrada = null; removerTela(v, id); } });
 }
 
-function limitarEnvio(call, kbps, tentativas = 0) {
-  const pc = call.peerConnection;
-  if (!pc || pc.connectionState !== 'connected') { if (tentativas < 60) setTimeout(() => limitarEnvio(call, kbps, tentativas + 1), 250); return; }
-  pc.getSenders().forEach((snd) => {
-    if (!snd.track || snd.track.kind !== 'video') return;
-    const p = snd.getParameters();
-    if (!p.encodings || !p.encodings.length) p.encodings = [{}];
-    p.encodings[0].maxBitrate = kbps * 1000;
-    snd.setParameters(p).catch(() => {});
-  });
+// Limita o envio de uma chamada: bitrate e, se pedido, fps e escala da resolução. Espera a conexão fechar (uma fila por chamada)
+// e não refaz o ajuste quando nada mudou, para não gastar CPU nem empilhar temporizadores.
+function limitarEnvio(call, kbps, extra = {}) {
+  call._desejo = { kbps, extra };
+  if (call._esperando) return;
+  call._esperando = true;
+  let tentativas = 0;
+  const tentar = () => {
+    const pc = call.peerConnection;
+    if (!pc || pc.connectionState !== 'connected') {
+      if (tentativas++ < 60) setTimeout(tentar, 250); else call._esperando = false;
+      return;
+    }
+    call._esperando = false;
+    const { kbps: kb, extra: ex } = call._desejo;
+    const chave = kb + '|' + (ex.fps || '') + '|' + (ex.escala || '');
+    if (call._limite === chave) return;
+    call._limite = chave;
+    pc.getSenders().forEach((snd) => {
+      if (!snd.track || snd.track.kind !== 'video') return;
+      const p = snd.getParameters();
+      if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+      p.encodings[0].maxBitrate = kb * 1000;
+      if (ex.fps) p.encodings[0].maxFramerate = ex.fps;
+      if (ex.escala) p.encodings[0].scaleResolutionDownBy = ex.escala;
+      snd.setParameters(p).catch(() => { call._limite = ''; });
+    });
+  };
+  tentar();
 }
 
 // Vigia: se pararem de chegar dados por ~10 s com a conexão aparentemente viva, reconecta.

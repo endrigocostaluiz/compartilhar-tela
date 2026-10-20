@@ -291,3 +291,14 @@ html.fx-pausa .mk-live i, html.fx-pausa .mk-linha, html.fx-pausa .mk-cursor, htm
 html.fx-pausa .v2-acento, html.fx-pausa .v2-rolar span, html.fx-pausa .j-live i, html.fx-pausa .j-codigo b, html.fx-pausa .lig use { animation-play-state: paused !important; }
 /* Transmitindo/assistindo: o fundo borrado animado some (pesa no compositor e fica atrás do vídeo) */
 body.foco .orb, body.foco .aurora { display: none !important; }
+
+/* Tela de transmissão compacta: ganha altura útil para o vídeo e os controles */
+body.foco.transmitindo .v2-hero, html.app-instalado body.foco.transmitindo .v2-hero { padding: 8px 16px 12px; }
+body.foco.transmitindo .v2-cmd-wrap .painel { padding: 10px 14px 14px; border-radius: var(--r-lg); }
+body.foco.transmitindo .tela.host { gap: 8px; }
+.tela.host .barra-topo { flex-wrap: nowrap; gap: 10px; }
+.tela.host .marca-mini { flex: none; gap: 8px; font-size: .88rem; }
+.tela.host .marca-mini img { width: 20px; height: 20px; border-radius: 6px; }
+.tela.host .barra-topo .status { min-width: 0; font-size: .76rem; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tela.host .host-grid { gap: 12px; }
+.tela.host .host-main, .tela.host .host-lado { gap: 10px; }

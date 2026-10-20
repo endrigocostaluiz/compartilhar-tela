@@ -32,7 +32,8 @@ Quem transmite pode deixar **até 3 espectadores** transmitirem a própria tela 
   O host vê uma prévia de cada convidado e pode **Parar** qualquer um a qualquer momento; o convidado também pode parar.
 - A imagem de cada convidado chega ao host e segue para a sala como uma chamada extra, pelos mesmos caminhos da principal (direto ou por
   repasse). Quem assiste monta a grade (1 tela cheia, 2 lado a lado, 3 e 4 em duas linhas); o host não compõe nada. Cada espectador direto
-  custa uma codificação extra no host por convidado (o bitrate de cada tela cai conforme o número de telas).
+  custa uma codificação extra no host por convidado, por isso as telas dos convidados saem reduzidas (960×540 a 24 fps com 1–2 convidados;
+  640×360 a 20 fps com 3) e o monitor de CPU/rede do host também as considera. Quem transmite junto não repassa imagem a outros espectadores.
 - Só vídeo: o áudio do convidado não é enviado (voltaria a ser capturado por quem usa "todo o áudio" e causaria eco).
 - Os convidados contam entre os 10 espectadores da sala.
 
