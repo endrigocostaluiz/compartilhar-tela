@@ -29,7 +29,8 @@ main { max-width: none; padding: 0; }
 .v2-hero h1 { font-size: clamp(2.5rem, 6.2vw, 5rem); font-weight: 700; line-height: 1.04; letter-spacing: -.045em; margin: 26px 0 22px; }
 .v2-acento { background: linear-gradient(100deg, var(--em2), #38bdf8, var(--em2)); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: gradmove 7s linear infinite; }
 @keyframes gradmove { to { background-position: 220% 0; } }
-.v2-hero-txt p { max-width: 640px; margin: 0 auto; color: var(--mut); font-size: 1.15rem; }
+.v2-hero-txt p { max-width: 860px; margin: 0 auto; color: var(--mut); font-size: clamp(.9rem, .75rem + .6vw, 1.2rem); text-wrap: balance; }
+.v2-hero-txt p b { color: var(--em2); font-weight: 700; }
 .v2-cmd-wrap { width: 100%; max-width: 1040px; margin-top: 46px; text-align: left; }
 .v2-cmd-wrap .painel { padding: 22px 24px; border-radius: var(--r-xl); box-shadow: 0 40px 90px -40px rgba(16,185,129,.4), inset 0 1px 0 rgba(255,255,255,.08); }
 .v2-cmd { gap: 14px; }
