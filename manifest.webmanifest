@@ -1,7 +1,7 @@
 {
   "name": "Compartilhar Tela",
   "short_name": "Tela",
-  "description": "Compartilhe sua tela e áudio em tempo real, direto entre navegadores.",
+  "description": "Compartilhe sua tela e áudio em tempo real, direto entre navegadores, com até 4 telas transmitindo juntas.",
   "lang": "pt-BR",
   "start_url": "./",
   "scope": "./",
