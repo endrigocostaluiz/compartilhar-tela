@@ -370,10 +370,6 @@
               </div>
             </div>
             <p class="dica" id="dica-qualidade"></p>
-            <div class="dica-jogos" id="dica-jogos">
-              <svg class="ic"><use href="#i-zap"/></svg>
-              <span><b>Vai transmitir jogos?</b> No pop-up do navegador, escolha <b>"Tela Inteira"</b>. Compartilhar apenas a <i>Janela</i> de jogos modernos em tela cheia/borderless pode causar tela preta ou congelamento ao focar no jogo.</span>
-            </div>
             <div class="v2-entrar">
               <span>Recebeu um código?</span>
               <form id="form-assistir">
@@ -398,16 +394,21 @@
                   <span class="tag tag-tempo mono" id="host-tempo">00:00</span>
                   <span class="tag tag-res mono" id="host-res"></span>
                   <span class="tag tag-rede" id="host-rede">Rede estável</span>
-                </div>
-                <div class="aviso-banner aviso-janela" id="aviso-janela" hidden>
-                  <div class="aviso-banner-corpo">
-                    <svg class="ic"><use href="#i-alert"/></svg>
-                    <div>
-                      <strong>Você está compartilhando uma Janela individual</strong>
-                      <p>Se for jogar e a imagem congelar ou ficar preta ao focar no jogo, use o botão <b>Trocar tela / janela</b> abaixo e escolha <b>"Tela Inteira"</b>.</p>
+
+                  <div class="aviso-banner aviso-janela" id="aviso-janela" hidden>
+                    <div class="aviso-banner-topo">
+                      <div class="aviso-banner-titulo">
+                        <svg class="ic"><use href="#i-alert"/></svg>
+                        <strong>Você está compartilhando uma Janela individual</strong>
+                      </div>
+                      <button type="button" class="btn-fechar-aviso" id="btn-fechar-aviso-janela" title="Fechar (não mostrar novamente nos próximos 5 dias)" aria-label="Fechar aviso">
+                        <svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+                      </button>
                     </div>
+                    <p class="aviso-banner-desc">
+                      Se for jogar e a imagem congelar ou ficar preta ao focar no jogo, use o botão <b>Trocar tela / janela</b> abaixo e escolha <b>"Tela Inteira"</b>.
+                    </p>
                   </div>
-                  <button type="button" class="btn-fechar-aviso" id="btn-fechar-aviso-janela" title="Dispensar aviso">×</button>
                 </div>
                 <div class="audio-info" id="audio-info">
                   <span class="rot"><svg class="ic"><use href="#i-volume"/></svg>Áudio enviado</span>

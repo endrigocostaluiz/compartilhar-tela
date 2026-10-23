@@ -349,9 +349,32 @@ function mostrarRetomar() {
   if (s) $('retomar-cod').textContent = s.codigo;
 }
 
+const AVISO_JANELA_STORAGE_KEY = 'avisoJanelaDispensa';
+const AVISO_JANELA_DISPENSA_MS = 5 * 24 * 60 * 60 * 1000; // 5 dias em ms
+
+function avisoJanelaDispensado() {
+  try {
+    const t = Number(localStorage.getItem(AVISO_JANELA_STORAGE_KEY) || '0');
+    if (t && (Date.now() - t) < AVISO_JANELA_DISPENSA_MS) return true;
+  } catch {}
+  return false;
+}
+
+function dispensarAvisoJanela() {
+  try {
+    localStorage.setItem(AVISO_JANELA_STORAGE_KEY, Date.now().toString());
+  } catch {}
+  const av = $('aviso-janela');
+  if (av) av.hidden = true;
+}
+
 function checarAvisoJanela(vt) {
   const aviso = $('aviso-janela');
   if (!aviso) return;
+  if (avisoJanelaDispensado()) {
+    aviso.hidden = true;
+    return;
+  }
   try {
     const s = vt && vt.getSettings ? vt.getSettings() : {};
     aviso.hidden = s.displaySurface !== 'window';
@@ -1715,10 +1738,7 @@ $('remoto').addEventListener('resize', () => {
 iniciarSeletores();
 
 if ($('btn-fechar-aviso-janela')) {
-  $('btn-fechar-aviso-janela').onclick = () => {
-    const av = $('aviso-janela');
-    if (av) av.hidden = true;
-  };
+  $('btn-fechar-aviso-janela').onclick = dispensarAvisoJanela;
 }
 
 document.querySelectorAll('.btn-dica').forEach((d) => {
