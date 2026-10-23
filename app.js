@@ -349,6 +349,17 @@ function mostrarRetomar() {
   if (s) $('retomar-cod').textContent = s.codigo;
 }
 
+function checarAvisoJanela(vt) {
+  const aviso = $('aviso-janela');
+  if (!aviso) return;
+  try {
+    const s = vt && vt.getSettings ? vt.getSettings() : {};
+    aviso.hidden = s.displaySurface !== 'window';
+  } catch {
+    aviso.hidden = true;
+  }
+}
+
 async function iniciarHost() {
   const [w, h] = RESOLUCOES[escolha.res];
   if (escolha.audioModo === 'aplicativos' && ehWindows && Assistente.estado !== 'conectado') Assistente.abrirPeloProtocolo();
@@ -371,6 +382,7 @@ async function iniciarHost() {
   const vt = capt.getVideoTracks()[0];
   try { await vt.applyConstraints(restricoesVideo()); } catch {}
   vt.onended = pararHost; // botão "Parar compartilhamento" do navegador
+  checarAvisoJanela(vt);
 
   // O stream enviado aos espectadores é estável: só as faixas dentro dele são trocadas.
   const stream = new MediaStream([vt]);
@@ -902,6 +914,7 @@ async function trocarFonte() {
     try { await novoV.applyConstraints(restricoesVideo()); } catch {}
     novoV.onended = pararHost;
     if ('contentHint' in novoV) novoV.contentHint = conteudo;
+    checarAvisoJanela(novoV);
 
     const velhoV = h.stream.getVideoTracks()[0];
     const velhoA = h.stream.getAudioTracks()[0];
@@ -1028,6 +1041,7 @@ function pararHost() {
   h.stream.getTracks().forEach((t) => t.stop());
   if (h.ctx) h.ctx.close().catch(() => {});
   $('preview').srcObject = null;
+  if ($('aviso-janela')) $('aviso-janela').hidden = true;
   mostrar('tela-inicio');
   mostrarRetomar();
   if (escolha.audioModo !== 'aplicativos') Assistente.desligar();
@@ -1699,6 +1713,20 @@ $('remoto').addEventListener('resize', () => {
 // endereço externo como compartilhartela-audio:// também dispara esse evento sem sair da página)
 
 iniciarSeletores();
+
+if ($('btn-fechar-aviso-janela')) {
+  $('btn-fechar-aviso-janela').onclick = () => {
+    const av = $('aviso-janela');
+    if (av) av.hidden = true;
+  };
+}
+
+document.querySelectorAll('.btn-dica').forEach((d) => {
+  d.onclick = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+  };
+});
 
 // Compartilhar exige getDisplayMedia (indisponível em celulares).
 if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {

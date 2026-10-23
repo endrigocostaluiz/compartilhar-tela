@@ -370,6 +370,10 @@
               </div>
             </div>
             <p class="dica" id="dica-qualidade"></p>
+            <div class="dica-jogos" id="dica-jogos">
+              <svg class="ic"><use href="#i-zap"/></svg>
+              <span><b>Vai transmitir jogos?</b> No pop-up do navegador, escolha <b>"Tela Inteira"</b>. Compartilhar apenas a <i>Janela</i> de jogos modernos em tela cheia/borderless pode causar tela preta ou congelamento ao focar no jogo.</span>
+            </div>
             <div class="v2-entrar">
               <span>Recebeu um código?</span>
               <form id="form-assistir">
@@ -394,6 +398,16 @@
                   <span class="tag tag-tempo mono" id="host-tempo">00:00</span>
                   <span class="tag tag-res mono" id="host-res"></span>
                   <span class="tag tag-rede" id="host-rede">Rede estável</span>
+                </div>
+                <div class="aviso-banner aviso-janela" id="aviso-janela" hidden>
+                  <div class="aviso-banner-corpo">
+                    <svg class="ic"><use href="#i-alert"/></svg>
+                    <div>
+                      <strong>Você está compartilhando uma Janela individual</strong>
+                      <p>Se for jogar e a imagem congelar ou ficar preta ao focar no jogo, use o botão <b>Trocar tela / janela</b> abaixo e escolha <b>"Tela Inteira"</b>.</p>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-fechar-aviso" id="btn-fechar-aviso-janela" title="Dispensar aviso">×</button>
                 </div>
                 <div class="audio-info" id="audio-info">
                   <span class="rot"><svg class="ic"><use href="#i-volume"/></svg>Áudio enviado</span>
@@ -438,11 +452,46 @@
                     </div>
                   </div>
                   <div class="host-botoes">
-                    <button id="btn-trocar" class="btn" title="Escolher outra tela, janela ou aba sem encerrar a transmissão"><svg class="ic"><use href="#i-swap"/></svg>Trocar tela / janela</button>
-                    <button id="btn-repasse" class="btn" title="Com mais de 3 espectadores, os demais recebem a imagem repassada por outro espectador. Seu PC codifica menos vezes e o FPS do jogo sofre menos."><svg class="ic"><use href="#i-users"/></svg><span>Repasse entre espectadores: ligado</span></button>
-                    <button id="btn-co" class="btn desligado" title="Permite que até 3 espectadores (cada um aprovado por você) transmitam a tela deles junto com a sua, em tela dividida de até 4 telas. Desligado, ninguém vê essa opção."><svg class="ic"><use href="#i-share"/></svg><span>Transmissão conjunta: desligada</span></button>
-                    <button id="btn-auto" class="btn" title="Reduz a qualidade sozinho quando a internet piora e volta ao que você escolheu quando estabiliza"><svg class="ic"><use href="#i-zap"/></svg><span>Ajuste automático: ligado</span></button>
-                    <button id="btn-audio-host" class="btn" title="Liga ou desliga o áudio enviado"><svg class="ic"><use href="#i-volume"/></svg><span>Áudio ligado</span></button>
+                    <button id="btn-trocar" class="btn" type="button">
+                      <svg class="ic"><use href="#i-swap"/></svg>
+                      <span>Trocar tela / janela</span>
+                      <span class="btn-dica" tabindex="0" role="button" aria-label="Ajuda sobre Trocar tela / janela">
+                        <span class="btn-dica-ico">?</span>
+                        <span class="btn-dica-balao"><b>Trocar tela / janela:</b> escolha outra tela inteira, janela ou aba sem reiniciar a sala.<br><i>Dica para jogos: prefira sempre Tela Inteira para evitar travamentos.</i></span>
+                      </span>
+                    </button>
+                    <button id="btn-repasse" class="btn" type="button">
+                      <svg class="ic"><use href="#i-users"/></svg>
+                      <span>Repasse entre espectadores: ligado</span>
+                      <span class="btn-dica" tabindex="0" role="button" aria-label="Ajuda sobre Repasse entre espectadores">
+                        <span class="btn-dica-ico">?</span>
+                        <span class="btn-dica-balao"><b>Repasse entre espectadores:</b> com 4 ou mais espectadores, eles retransmitem entre si. Seu computador codifica menos vezes, poupando seu processador e mantendo os FPS do seu jogo.</span>
+                      </span>
+                    </button>
+                    <button id="btn-co" class="btn desligado" type="button">
+                      <svg class="ic"><use href="#i-share"/></svg>
+                      <span>Transmissão conjunta: desligada</span>
+                      <span class="btn-dica" tabindex="0" role="button" aria-label="Ajuda sobre Transmissão conjunta">
+                        <span class="btn-dica-ico">?</span>
+                        <span class="btn-dica-balao"><b>Transmissão conjunta:</b> permite que até 3 espectadores peçam para transmitir a tela deles junto com a sua (em tela dividida de até 4 telas). Cada pedido precisa da sua aprovação.</span>
+                      </span>
+                    </button>
+                    <button id="btn-auto" class="btn" type="button">
+                      <svg class="ic"><use href="#i-zap"/></svg>
+                      <span>Ajuste automático: ligado</span>
+                      <span class="btn-dica" tabindex="0" role="button" aria-label="Ajuda sobre Ajuste automático">
+                        <span class="btn-dica-ico">?</span>
+                        <span class="btn-dica-balao"><b>Ajuste automático:</b> reduz a qualidade sozinho quando a internet oscilar para não travar a live, e volta ao máximo quando a rede estabilizar.</span>
+                      </span>
+                    </button>
+                    <button id="btn-audio-host" class="btn" type="button">
+                      <svg class="ic"><use href="#i-volume"/></svg>
+                      <span>Áudio ligado</span>
+                      <span class="btn-dica" tabindex="0" role="button" aria-label="Ajuda sobre Áudio da transmissão">
+                        <span class="btn-dica-ico">?</span>
+                        <span class="btn-dica-balao"><b>Áudio enviado:</b> liga ou silencia o som que você está transmitindo a qualquer momento durante a live.</span>
+                      </span>
+                    </button>
                   </div>
                 </div>
               </div>

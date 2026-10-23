@@ -465,10 +465,176 @@ body.cinema-ativo, body.janela-ativa { overflow: hidden; }
 .host-ajustes .grupo { min-width: 0; }
 .host-ajustes .seg button { padding: 8px 4px; font-size: .82rem; }
 .host-botoes { display: flex; flex-wrap: wrap; gap: 10px; }
-.host-botoes .btn { flex: 1 1 auto; }
+.host-botoes .btn { flex: 1 1 auto; position: relative; justify-content: flex-start; gap: 8px; padding-right: 12px; }
 .host-botoes .btn:disabled { opacity: .55; }
+.host-botoes .btn > span:first-of-type { flex: 1 1 auto; text-align: left; }
 #btn-audio-host.desligado { color: #fcd34d; border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.1); }
 @media (max-width: 760px) { .host-ajustes { grid-template-columns: 1fr; } }
+
+/* Ícone de dica '?' nos botões com tooltip explicativo */
+.btn-dica {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  flex: none;
+  cursor: help;
+  outline: none;
+  padding: 3px;
+}
+.btn-dica-ico {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--mut);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.btn-dica:hover .btn-dica-ico,
+.btn-dica:focus-visible .btn-dica-ico {
+  color: #fff;
+  background: var(--em, #10b981);
+  border-color: var(--em, #10b981);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+.btn-dica-balao {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: -8px;
+  background: #111827;
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--r-md, 8px);
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  font-weight: 400;
+  width: max-content;
+  max-width: 280px;
+  white-space: normal;
+  text-align: left;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+  pointer-events: none;
+  z-index: 1000;
+}
+.btn-dica-balao strong,
+.btn-dica-balao b {
+  color: #fff;
+  font-weight: 600;
+}
+.btn-dica-balao i {
+  color: #a7f3d0;
+  font-style: normal;
+}
+.btn-dica-balao::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 12px;
+  border: 6px solid transparent;
+  border-top-color: #111827;
+}
+.btn-dica:hover .btn-dica-balao,
+.btn-dica:focus-visible .btn-dica-balao {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Aviso de captura de janela (jogos/borderless) */
+.aviso-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--r-md);
+  margin-top: 12px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.38);
+  color: #fef3c7;
+  font-size: .86rem;
+  line-height: 1.45;
+  animation: surge .25s ease;
+}
+.aviso-banner[hidden] { display: none; }
+.aviso-banner-corpo {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+}
+.aviso-banner .ic {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: #fbbf24;
+  margin-top: 2px;
+}
+.aviso-banner strong {
+  display: block;
+  color: #fbbf24;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.aviso-banner p {
+  margin: 0;
+  color: #fef3c7;
+}
+.btn-fechar-aviso {
+  background: none;
+  border: none;
+  color: #fbbf24;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: .8;
+  transition: opacity .15s, background .15s;
+}
+.btn-fechar-aviso:hover {
+  opacity: 1;
+  background: rgba(251, 191, 36, 0.2);
+}
+
+/* Dica para jogos na tela inicial */
+.dica-jogos {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: var(--txt);
+  font-size: .84rem;
+  line-height: 1.45;
+  margin-top: 10px;
+}
+.dica-jogos .ic {
+  flex: none;
+  color: var(--em);
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+}
+.dica-jogos b {
+  color: var(--em2);
+}
 
 /* Estado da rede de quem transmite */
 .tag-rede { bottom: 12px; right: 12px; color: var(--em2); }
