@@ -16,7 +16,9 @@ http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (p.endsWith('/')) p += 'index.html';
   const arquivo = path.join(raiz, path.normalize(p));
-  if (!arquivo.startsWith(raiz) || arquivo.endsWith('servidor-local.js')) { res.writeHead(403); return res.end(); }
+  const rel = path.relative(raiz, arquivo);
+  // fora da pasta do projeto, o próprio servidor ou arquivos/pastas ocultos (.git, .env...) não são servidos
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel) || arquivo.endsWith('servidor-local.js') || rel.split(path.sep).some((s) => s.startsWith('.'))) { res.writeHead(403); return res.end(); }
   fs.readFile(arquivo, (err, dados) => {
     if (err) { res.writeHead(404); return res.end('Não encontrado'); }
     res.writeHead(200, { 'Content-Type': tipos[path.extname(arquivo)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });

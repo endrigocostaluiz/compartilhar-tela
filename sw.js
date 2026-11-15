@@ -1,6 +1,6 @@
 // Service worker: só guarda o "casco" do app para instalação/abertura rápida.
 // Nunca intercepta WebSocket/WebRTC (não passam pelo fetch do SW).
-const CACHE = 'compartilhar-tela-v52';
+const CACHE = 'compartilhar-tela-v56';
 const ARQUIVOS = [
   './',
   './index.html',
@@ -31,15 +31,22 @@ self.addEventListener('activate', (e) => {
 });
 
 // Rede primeiro (para sempre pegar a versão nova), cache como reserva.
+// A chave do cache ignora a query string: links de sala (?sala=CODIGO) não geram uma entrada por código
+// e os códigos não ficam guardados no cache. Só respostas válidas (200) são guardadas.
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  url.search = '';
+  const chave = url.href;
   e.respondWith(
     fetch(e.request)
       .then((r) => {
-        const copia = r.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copia));
+        if (r.ok && r.type === 'basic') {
+          const copia = r.clone();
+          caches.open(CACHE).then((c) => c.put(chave, copia));
+        }
         return r;
       })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match('./index.html')))
+      .catch(() => caches.match(chave).then((r) => r || caches.match('./index.html')))
   );
 });

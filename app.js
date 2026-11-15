@@ -26,10 +26,11 @@ function iceServers() {
 
 // ---------- Qualidade ----------
 // Escolha do usuário (resolução/fps/áudio), guardada entre visitas.
-const escolha = { res: 720, fps: 30, audio: true, auto: true, repasse: true, audioModo: 'captura', appsSel: [], appsModo: 'incluir' };
+const escolha = { res: 720, fps: 60, audio: true, auto: false, repasse: true, audioModo: 'captura', appsSel: [], appsModo: 'incluir' };
 try { Object.assign(escolha, JSON.parse(localStorage.getItem('escolha') || '{}')); } catch {}
-// O áudio sempre começa em "todo o áudio" (o padrão); escolher aplicativos é opcional e só vale na sessão.
-escolha.audioModo = 'captura';
+// Ao abrir, sempre começa em 720p, 60 fps, áudio ligado ("todo o áudio") e ajuste automático desligado.
+// Escolher aplicativos é opcional e só vale na sessão.
+Object.assign(escolha, { res: 720, fps: 60, audio: true, auto: false, audioModo: 'captura' });
 if (!Array.isArray(escolha.appsSel)) escolha.appsSel = [];
 if (escolha.appsModo !== 'excluir') escolha.appsModo = 'incluir';
 
@@ -65,10 +66,30 @@ function perfil(n) {
   return { kbps, fps, escala, nivel, rotulo: `${alt}p · ${fps} fps · ${mbps}`, curto: `${alt}p·${fps}` };
 }
 
+// Opus em estéreo e 128 kbps com correção de perdas: som de jogo/música com mais fidelidade (o padrão é mono-ish, ~32 kbps).
+function ajustarOpus(linhas) {
+  const ini = linhas.findIndex((l) => l.startsWith('m=audio'));
+  if (ini < 0) return linhas;
+  let fim = linhas.findIndex((l, i) => i > ini && l.startsWith('m='));
+  if (fim < 0) fim = linhas.length;
+  const bloco = linhas.slice(ini, fim);
+  const rtp = bloco.findIndex((l) => /^a=rtpmap:\d+ opus\/48000\/2/i.test(l));
+  if (rtp < 0) return linhas;
+  const pt = bloco[rtp].match(/^a=rtpmap:(\d+)/)[1];
+  const ajustes = { stereo: '1', 'sprop-stereo': '1', maxaveragebitrate: '128000', useinbandfec: '1' };
+  const fmtp = bloco.findIndex((l) => l.startsWith(`a=fmtp:${pt} `));
+  const params = new Map();
+  if (fmtp >= 0) bloco[fmtp].slice(`a=fmtp:${pt} `.length).split(';').forEach((p) => { const [k, v] = p.split('='); if (k) params.set(k.trim(), v); });
+  Object.entries(ajustes).forEach(([k, v]) => params.set(k, v));
+  const nova = `a=fmtp:${pt} ` + [...params].map(([k, v]) => (v === undefined ? k : `${k}=${v}`)).join(';');
+  if (fmtp >= 0) bloco[fmtp] = nova; else bloco.splice(rtp + 1, 0, nova);
+  return [...linhas.slice(0, ini), ...bloco, ...linhas.slice(fim)];
+}
+
 // Ajusta o SDP do vídeo: prefere H.264 (codificação por hardware na maioria dos PCs)
 // e define bitrate inicial/mínimo, senão o WebRTC começa em ~300 kbps e fica borrado.
 function ajustarSdp(sdp, kbps) {
-  const linhas = sdp.split('\r\n');
+  const linhas = ajustarOpus(sdp.split('\r\n'));
   const ini = linhas.findIndex((l) => l.startsWith('m=video'));
   if (ini < 0) return sdp;
   let fim = linhas.findIndex((l, i) => i > ini && l.startsWith('m='));
@@ -131,7 +152,8 @@ function marcarSeg(idSeg, valor) {
 }
 function atualizarDica() {
   // só avisa quando a qualidade escolhida é pesada; sem a linha fixa de consumo
-  const pesado = kbpsBase(escolha.res, escolha.fps) / 1000 >= 4;
+  // 720p a 60 fps (~4,1 Mbps) é o padrão e não deve alarmar; o aviso vale a partir de ~1080p a 30 fps
+  const pesado = kbpsBase(escolha.res, escolha.fps) / 1000 > 4.5;
   const dica = $('dica-qualidade');
   dica.className = 'dica aviso';
   dica.hidden = !pesado;
@@ -291,7 +313,18 @@ function alvoCaptura() {
 }
 function restricoesVideo() {
   const t = alvoCaptura();
-  return { width: { ideal: t.largura }, height: { ideal: t.altura }, frameRate: { ideal: t.fps, max: t.fps } };
+  // No "max" on frameRate: a hard cap set at capture time can block raising the rate later (the sender already caps fps)
+  return { width: { ideal: t.largura }, height: { ideal: t.altura }, frameRate: { ideal: t.fps } };
+}
+// Mostra um aviso no status da sala e volta ao texto anterior depois de alguns segundos.
+function avisarTemporario(texto) {
+  const st = $('host-status');
+  const antes = { t: st.textContent, c: st.className };
+  status(st, texto, 'erro');
+  setTimeout(() => {
+    if (st.textContent !== texto) return;
+    st.textContent = antes.t; st.title = antes.t; st.className = antes.c;
+  }, 6000);
 }
 async function aplicarCaptura(forcar) {
   if (!host) return;
@@ -299,7 +332,8 @@ async function aplicarCaptura(forcar) {
   const chave = `${t.largura}x${t.altura}@${t.fps}`;
   if (!forcar && chave === host.capChave) return;
   host.capChave = chave;
-  try { await host.stream.getVideoTracks()[0].applyConstraints(restricoesVideo()); } catch {}
+  try { await host.stream.getVideoTracks()[0].applyConstraints(restricoesVideo()); }
+  catch (e) { if (forcar) avisarTemporario('O navegador não aplicou a nova qualidade à captura (' + (e.name || 'erro') + '). A imagem enviada continua limitada pelos ajustes.'); }
   atualizarTagResolucao();
 }
 
@@ -785,6 +819,10 @@ function aplicarEmSender(call) {
   if (!pc) return;
   const altura = (host.stream.getVideoTracks()[0].getSettings().height) || RESOLUCOES[escolha.res][1];
   const escalaBase = Math.max(1, altura / alvoCaptura().altura); // normalmente 1: a captura já está no tamanho alvo
+  // só reaplica quando algo mudou (esta função roda a cada atualização de qualidade)
+  const chave = `${p.kbps}|${p.fps}|${escalaBase.toFixed(3)}|${conteudo}`;
+  if (call._envio === chave) return;
+  call._envio = chave;
   pc.getSenders().forEach((s) => {
     if (!s.track || s.track.kind !== 'video') return;
     const params = s.getParameters();
@@ -793,7 +831,7 @@ function aplicarEmSender(call) {
     params.encodings[0].maxFramerate = p.fps;
     params.encodings[0].scaleResolutionDownBy = escalaBase;
     params.degradationPreference = conteudo === 'detail' ? 'maintain-resolution' : 'maintain-framerate';
-    s.setParameters(params).catch(() => {});
+    s.setParameters(params).catch(() => { call._envio = ''; });
   });
 }
 
@@ -1094,7 +1132,7 @@ function overlay(modo, msg) {
 }
 
 // Nome do espectador: guardado por 1 ano (localStorage + cookie de reserva).
-function limparNome(n) { return String(n || '').replace(/[ -<>]/g, '').trim().slice(0, 24); }
+function limparNome(n) { return String(n || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 24); }
 function lerNome() {
   try { const n = limparNome(localStorage.getItem('nomeViewer')); if (n) return n; } catch {}
   const m = document.cookie.match(/(?:^|; )nomeViewer=([^;]*)/);
