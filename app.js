@@ -52,7 +52,7 @@ const NIVEIS = [
 // Reduz conforme o nº de espectadores (o upload de quem compartilha é o gargalo)
 // e conforme o nível de degradação causado pela rede.
 function perfil(n) {
-  const nivel = host && escolha.auto !== false ? host.nivel || 0 : 0;
+  const nivel = host ? (escolha.auto !== false ? host.nivel : host.nivelCpu) || 0 : 0; // automático desligado: só o alívio de CPU
   const N = NIVEIS[nivel];
   const base = kbpsBase(escolha.res, escolha.fps);
   let fator = 1, escala = 1;
@@ -443,7 +443,7 @@ async function iniciarHost() {
 
   // O stream enviado aos espectadores é estável: só as faixas dentro dele são trocadas.
   const stream = new MediaStream([vt]);
-  host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null, ctx: null, audioReal: false, audioLigado: true, nivel: 0, ruim: 0, bom: 0, monitor: null, sinal: null, repasse: escolha.repasse !== false, capChave: '', coPermitido: false, cos: new Map(), coOrdem: 0 };
+  host = { stream, viewers: new Map(), peer: null, codigo: '', contador: 0, timer: null, ctx: null, audioReal: false, audioLigado: true, nivel: 0, ruim: 0, bom: 0, nivelCpu: 0, cpuRuim: 0, cpuBom: 0, monitor: null, sinal: null, repasse: escolha.repasse !== false, capChave: '', coPermitido: false, cos: new Map(), coOrdem: 0 };
   host.monitor = setInterval(monitorarRede, 2000);
   host.batida = setInterval(() => { if (host && host.codigo) guardarSala(host.codigo); }, 60000);
   host.audioReal = !!faixaA;
@@ -864,10 +864,33 @@ function mostrarRede(estado) {
     : n === 0 ? 'Rede estável' : `Rede instável · qualidade reduzida (${n}/${NIVEIS.length - 1})`;
 }
 
+// Alívio de CPU em segundo plano, só com o ajuste automático desligado (ligado, ele já cobre a CPU).
+// Ignora rede por completo: só reduz um pouco (até NIVEL_CPU_MAX) se o codificador reportar limitação por CPU
+// e volta devagar quando isso passa. O resto da qualidade continua como o usuário escolheu.
+const NIVEL_CPU_MAX = 2;
+async function aliviarCpu(h) {
+  const calls = [...h.viewers.values()].flatMap((v) => [v.call, ...v.coCalls.values()]).filter(Boolean);
+  const medidas = (await Promise.all(calls.map(medirEspectador))).filter(Boolean);
+  if (host !== h || !medidas.length) return;
+  if (medidas.some((m) => m.enc && m.enc.limite === 'cpu')) {
+    h.cpuBom = 0; h.cpuRuim++;
+    if (h.cpuRuim >= 2 && h.nivelCpu < NIVEL_CPU_MAX) { h.nivelCpu++; h.cpuRuim = 0; atualizarQualidade(); }
+  } else {
+    h.cpuRuim = 0;
+    if (h.nivelCpu > 0 && ++h.cpuBom >= 15) { h.nivelCpu--; h.cpuBom = 0; atualizarQualidade(); } // ~30 s sem limitação
+  }
+}
+
 async function monitorarRede() {
   const h = host;
   if (!h) return;
-  if (escolha.auto === false) { if (h.nivel) { h.nivel = 0; atualizarQualidade(); } mostrarRede(); return; }
+  if (escolha.auto === false) {
+    if (h.nivel) { h.nivel = 0; atualizarQualidade(); }
+    await aliviarCpu(h);
+    mostrarRede();
+    return;
+  }
+  if (h.nivelCpu) { h.nivelCpu = 0; h.cpuRuim = 0; h.cpuBom = 0; atualizarQualidade(); }
   if (h.cos.size) medirTelasCo(h);
   const principais = [...h.viewers.values()].filter((v) => v.call);
   const extras = [...h.viewers.values()].flatMap((v) => [...v.coCalls.values()]);
@@ -947,7 +970,7 @@ async function aplicarQualidadeAoVivo() {
   salvarEscolha();
   sincronizarAjustesAoVivo();
   if (!host) return;
-  host.nivel = 0; host.ruim = 0; host.bom = 0;
+  host.nivel = 0; host.ruim = 0; host.bom = 0; host.nivelCpu = 0; host.cpuRuim = 0; host.cpuBom = 0;
   await aplicarCaptura(true);
   atualizarQualidade();
 }
